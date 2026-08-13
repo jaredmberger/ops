@@ -20,7 +20,7 @@ const SERVICES = [
   { id:'page-studio', name:'Page Studio', url:'https://page-studio.oceanliners.net/', kind:'tool' },
   { id:'launcher', name:'CuratorOS Launcher', url:'https://launch.oceanliners.net/', kind:'tool' },
   { id:'analytics', name:'Curator Analytics', url:'https://analytics.oceanliners.net/', kind:'tool' },
-  { id:'content-opportunity', name:'Content Opportunity', url:'https://content-opportunity.oceanliners.net/', kind:'tool' }
+  { id:'content-opportunity', name:'Content Opportunity', url:'https://content.oceanliners.net/', kind:'tool' }
 ];
 
 export default {
