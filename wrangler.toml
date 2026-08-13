@@ -1,5 +1,5 @@
 name = "ops"
-main = "src/entry-v1.3.js"
+main = "src/entry-v1.4.js"
 compatibility_date = "2026-08-12"
 compatibility_flags = ["global_fetch_strictly_public"]
 workers_dev = true
@@ -7,6 +7,10 @@ workers_dev = true
 [[kv_namespaces]]
 binding = "CURATOR_OPS_RECORDS"
 id = "747c318b62fa479aa486130011d5670d"
+
+[[kv_namespaces]]
+binding = "CURATOR_ERROR_RECORDS"
+id = "447306da3a754b44830d2ac8608322c0"
 
 [version_metadata]
 binding = "CF_VERSION_METADATA"
