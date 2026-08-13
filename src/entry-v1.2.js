@@ -8,29 +8,22 @@ const DEPLOY_GRACE_MS = 15 * 60 * 1000;
 
 const RUNTIMES = [
   { id:'error-bus', name:'Error Bus', runtimeUrl:'https://errors.oceanliners.net/api/runtime', repository:'jaredmberger/errors' },
-  { id:'verify', name:'Curator Verify', runtimeUrl:'https://verify.oceanlinercurator.com/api/runtime', repository:'jaredmberger/verify' }
+  { id:'verify', name:'Curator Verify', runtimeUrl:'https://verify.oceanlinercurator.com/api/runtime', repository:'jaredmberger/verify' },
+  { id:'site-health', name:'Site Health', runtimeUrl:'https://site-health.oceanliners.net/api/runtime', repository:'jaredmberger/site-health' },
+  { id:'integrity', name:'Curator Integrity', runtimeUrl:'https://integrity.oceanliners.net/api/runtime', repository:'jaredmberger/curator-integrity' },
+  { id:'speed', name:'Curator Speed', runtimeUrl:'https://speed.oceanliners.net/api/runtime', repository:'jaredmberger/speed' },
+  { id:'indexer', name:'Curator Indexer', runtimeUrl:'https://curator-indexer.oceanliners.net/api/runtime', repository:'jaredmberger/curator-indexer' },
+  { id:'search-intelligence', name:'Search Intelligence', runtimeUrl:'https://search-intelligence.oceanliners.net/api/runtime', repository:'jaredmberger/search-intelligence' }
 ];
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-
-    if (request.method === 'GET' && url.pathname === '/api/deployment-drift') {
-      return json({ ok:true, snapshot:await readDriftSnapshot(env) });
-    }
-
-    if (request.method === 'POST' && url.pathname === '/api/deployment-drift-check-now') {
-      const snapshot = await collectDeploymentDrift(env, 'manual');
-      return json({ ok:true, snapshot });
-    }
-
-    if (request.method === 'GET' && url.pathname === '/deployments') {
-      return html(renderDeployments(await readDriftSnapshot(env)));
-    }
-
+    if (request.method === 'GET' && url.pathname === '/api/deployment-drift') return json({ ok:true, snapshot:await readDriftSnapshot(env) });
+    if (request.method === 'POST' && url.pathname === '/api/deployment-drift-check-now') return json({ ok:true, snapshot:await collectDeploymentDrift(env, 'manual') });
+    if (request.method === 'GET' && url.pathname === '/deployments') return html(renderDeployments(await readDriftSnapshot(env)));
     return base.fetch(request, env, ctx);
   },
-
   async scheduled(controller, env, ctx) {
     const result = base.scheduled(controller, env, ctx);
     ctx.waitUntil(collectDeploymentDrift(env, `cron:${controller?.cron || 'unknown'}`).catch(error => console.error('Ops deployment drift collection failed', error)));
@@ -40,155 +33,18 @@ export default {
 
 async function collectDeploymentDrift(env, source) {
   requireKv(env);
-  const services = [];
-
-  for (const service of RUNTIMES) {
-    const runtime = await fetchJson(service.runtimeUrl, 'CuratorOps-Drift/1.2', env, true);
-    const github = await fetchGitHubHead(service.repository, env);
-    services.push(classify(service, runtime, github));
-  }
-
-  const counts = {
-    inSync: services.filter(x=>x.state==='in-sync').length,
-    pending: services.filter(x=>x.state==='pending').length,
-    drift: services.filter(x=>x.state==='drift').length,
-    unknown: services.filter(x=>x.state==='unknown').length
-  };
-
-  const snapshot = {
-    generatedAt:new Date().toISOString(),
-    source,
-    graceMinutes:Math.round(DEPLOY_GRACE_MS/60000),
-    accessServiceAuthConfigured:Boolean(env.CF_ACCESS_CLIENT_ID && env.CF_ACCESS_CLIENT_SECRET),
-    summary:{
-      total:services.length,
-      ...counts,
-      status:counts.drift || counts.unknown ? 'attention' : (counts.pending ? 'deploying' : 'healthy')
-    },
-    services
-  };
-
-  await env[KV].put(DRIFT_SNAPSHOT_KEY, JSON.stringify(snapshot));
-  const ts=Date.parse(snapshot.generatedAt)||Date.now();
-  await env[KV].put(`${DRIFT_HISTORY_PREFIX}${String(9999999999999-ts).padStart(13,'0')}:${crypto.randomUUID()}`, JSON.stringify(snapshot), { expirationTtl:60*60*24*180 });
-  return snapshot;
+  const services=[];
+  for(const service of RUNTIMES){const runtime=await fetchJson(service.runtimeUrl,'CuratorOps-Drift/1.2',env,true);const github=await fetchGitHubHead(service.repository,env);services.push(classify(service,runtime,github));}
+  const counts={inSync:services.filter(x=>x.state==='in-sync').length,pending:services.filter(x=>x.state==='pending').length,drift:services.filter(x=>x.state==='drift').length,unknown:services.filter(x=>x.state==='unknown').length};
+  const snapshot={generatedAt:new Date().toISOString(),source,graceMinutes:Math.round(DEPLOY_GRACE_MS/60000),accessServiceAuthConfigured:Boolean(env.CF_ACCESS_CLIENT_ID&&env.CF_ACCESS_CLIENT_SECRET),summary:{total:services.length,...counts,status:counts.drift||counts.unknown?'attention':counts.pending?'deploying':'healthy'},services};
+  await env[KV].put(DRIFT_SNAPSHOT_KEY,JSON.stringify(snapshot));const ts=Date.parse(snapshot.generatedAt)||Date.now();await env[KV].put(`${DRIFT_HISTORY_PREFIX}${String(9999999999999-ts).padStart(13,'0')}:${crypto.randomUUID()}`,JSON.stringify(snapshot),{expirationTtl:60*60*24*180});return snapshot;
 }
 
-function classify(service, runtimeResult, githubResult) {
-  const runtime = runtimeResult.ok ? runtimeResult.data : null;
-  const github = githubResult.ok ? githubResult.data : null;
-  const runningCommit = runtime?.build?.commit || null;
-  const githubCommit = github?.sha || null;
-  const githubCommittedAt = github?.committedAt || null;
-  const headAgeMs = githubCommittedAt ? Date.now()-Date.parse(githubCommittedAt) : null;
+function classify(service,runtimeResult,githubResult){const runtime=runtimeResult.ok?runtimeResult.data:null,github=githubResult.ok?githubResult.data:null,runningCommit=runtime?.build?.commit||null,githubCommit=github?.sha||null,githubCommittedAt=github?.committedAt||null,headAgeMs=githubCommittedAt?Date.now()-Date.parse(githubCommittedAt):null;let state='unknown',message='Deployment state could not be determined.';if(runningCommit&&githubCommit&&runningCommit===githubCommit){state='in-sync';message='Running Worker matches GitHub main.'}else if(runningCommit&&githubCommit&&Number.isFinite(headAgeMs)&&headAgeMs<DEPLOY_GRACE_MS){state='pending';message='GitHub is newer; deployment is within the normal grace window.'}else if(runningCommit&&githubCommit){state='drift';message='Running Worker does not match GitHub main beyond the deployment grace window.'}return{id:service.id,name:service.name,repository:service.repository,state,message,running:{commit:runningCommit,version:runtime?.version||null,cloudflareVersionId:runtime?.cloudflareVersion?.id||null,cloudflareVersionTimestamp:runtime?.cloudflareVersion?.timestamp||null,buildSource:runtime?.build?.source||null,buildBranch:runtime?.build?.branch||null,buildUuid:runtime?.build?.buildUuid||null},github:{commit:githubCommit,committedAt:githubCommittedAt,message:github?.message||null},errors:{runtime:runtimeResult.ok?null:runtimeResult.error,github:githubResult.ok?null:githubResult.error},checkedAt:new Date().toISOString()}}
 
-  let state='unknown';
-  let message='Deployment state could not be determined.';
-  if (runningCommit && githubCommit && runningCommit === githubCommit) {
-    state='in-sync';
-    message='Running Worker matches GitHub main.';
-  } else if (runningCommit && githubCommit && Number.isFinite(headAgeMs) && headAgeMs < DEPLOY_GRACE_MS) {
-    state='pending';
-    message='GitHub is newer; deployment is within the normal grace window.';
-  } else if (runningCommit && githubCommit) {
-    state='drift';
-    message='Running Worker does not match GitHub main beyond the deployment grace window.';
-  }
-
-  return {
-    id:service.id,
-    name:service.name,
-    repository:service.repository,
-    state,
-    message,
-    running:{
-      commit:runningCommit,
-      version:runtime?.version || null,
-      cloudflareVersionId:runtime?.cloudflareVersion?.id || null,
-      cloudflareVersionTimestamp:runtime?.cloudflareVersion?.timestamp || null,
-      buildSource:runtime?.build?.source || null,
-      buildBranch:runtime?.build?.branch || null,
-      buildUuid:runtime?.build?.buildUuid || null
-    },
-    github:{
-      commit:githubCommit,
-      committedAt:githubCommittedAt,
-      message:github?.message || null
-    },
-    errors:{
-      runtime:runtimeResult.ok ? null : runtimeResult.error,
-      github:githubResult.ok ? null : githubResult.error
-    },
-    checkedAt:new Date().toISOString()
-  };
-}
-
-async function fetchGitHubHead(repository, env) {
-  const result = await fetchJson(`https://api.github.com/repos/${repository}/commits/main`, 'CuratorOps/1.2', env, false);
-  if (!result.ok) return result;
-  const payload=result.data;
-  return {
-    ok:true,
-    data:{
-      sha:payload?.sha || null,
-      committedAt:payload?.commit?.committer?.date || payload?.commit?.author?.date || null,
-      message:String(payload?.commit?.message || '').split('\n')[0].slice(0,300)
-    }
-  };
-}
-
-async function fetchJson(url, userAgent, env, useAccess) {
-  const controller=new AbortController();
-  const timer=setTimeout(()=>controller.abort(),REQUEST_TIMEOUT_MS);
-  try {
-    const target = new URL(url);
-    target.searchParams.set('ops', Date.now().toString());
-    const headers={accept:'application/vnd.github+json, application/json','user-agent':userAgent};
-    if (useAccess) Object.assign(headers, accessHeaders(env, target));
-    const response=await fetch(target.href,{
-      method:'GET',redirect:'follow',cache:'no-store',
-      headers,
-      signal:controller.signal,
-      cf:{cacheTtl:0,cacheEverything:false}
-    });
-    if(!response.ok) return {ok:false,error:`HTTP ${response.status}`};
-    return {ok:true,data:await response.json()};
-  } catch(error) {
-    return {ok:false,error:error?.name==='AbortError'?'timeout':(error?.message||String(error))};
-  } finally { clearTimeout(timer); }
-}
-
-function accessHeaders(env, target) {
-  if (!env.CF_ACCESS_CLIENT_ID || !env.CF_ACCESS_CLIENT_SECRET) return {};
-  let host='';
-  try { host=(target instanceof URL ? target : new URL(target)).hostname.toLowerCase(); } catch { return {}; }
-  const owned = host === 'oceanliners.net' || host.endsWith('.oceanliners.net') || host === 'oceanlinercurator.com' || host.endsWith('.oceanlinercurator.com');
-  if (!owned) return {};
-  return {
-    'CF-Access-Client-Id': env.CF_ACCESS_CLIENT_ID,
-    'CF-Access-Client-Secret': env.CF_ACCESS_CLIENT_SECRET
-  };
-}
-
-async function readDriftSnapshot(env) {
-  requireKv(env);
-  return await env[KV].get(DRIFT_SNAPSHOT_KEY,'json') || {
-    generatedAt:null,
-    source:null,
-    graceMinutes:15,
-    summary:{total:RUNTIMES.length,inSync:0,pending:0,drift:0,unknown:RUNTIMES.length,status:'unknown'},
-    services:RUNTIMES.map(x=>({id:x.id,name:x.name,repository:x.repository,state:'unknown'}))
-  };
-}
-
-function renderDeployments(snapshot) {
-  const rows=(snapshot.services||[]).map(s=>`<tr><td><span class="dot ${escapeHtml(s.state)}"></span>${escapeHtml(s.name)}</td><td>${escapeHtml(s.state)}</td><td><code>${shortSha(s.running?.commit)}</code></td><td><code>${shortSha(s.github?.commit)}</code></td><td>${escapeHtml(s.running?.version||'—')}</td><td>${escapeHtml(s.message||'')}</td></tr>`).join('');
-  const x=snapshot.summary||{};
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Deployments · Curator Ops</title><style>:root{color-scheme:dark;--bg:#0a1110;--panel:#101918;--brass:#bfa46a;--text:#f3eee3;--muted:#9aa6a0;--line:#263330}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% -20%,#17221f 0,#0a1110 52%);color:var(--text);font-family:Georgia,'Times New Roman',serif;min-height:100vh}.wrap{max-width:1150px;margin:auto;padding:58px 20px}.eyebrow{font:600 12px system-ui,sans-serif;letter-spacing:.18em;text-transform:uppercase;color:var(--brass)}h1{font-size:clamp(38px,7vw,62px);font-weight:400;margin:.2em 0}.lede{color:#d3d6d1;font-size:18px;line-height:1.6;max-width:800px}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:28px 0}.card,.table{border:1px solid var(--line);background:rgba(16,25,24,.84);border-radius:16px}.card{padding:18px}.label{font:600 11px system-ui,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}.value{font-size:28px;margin-top:8px}.table{overflow:auto}table{width:100%;border-collapse:collapse;min-width:900px;font:14px system-ui,sans-serif}th,td{text-align:left;padding:14px 15px;border-bottom:1px solid var(--line)}th{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:9px}.in-sync{background:#58c77a}.pending{background:#d6ad58}.drift{background:#d86666}.unknown{background:#8b9490}code{color:#e9d49e}a{color:#e9d49e}footer{margin-top:28px;color:#6f7974;font:12px system-ui,sans-serif}@media(max-width:700px){.cards{grid-template-columns:1fr 1fr}}</style></head><body><main class="wrap"><div class="eyebrow">CuratorOS · Deployment Truth</div><h1>Deployment Drift</h1><p class="lede">Compares the GitHub main branch with the commit stamped into the Worker actually serving traffic. A ${snapshot.graceMinutes||15}-minute grace period prevents normal deployment propagation from becoming an alert.</p><section class="cards"><div class="card"><div class="label">State</div><div class="value">${escapeHtml(x.status||'unknown')}</div></div><div class="card"><div class="label">In sync</div><div class="value">${x.inSync||0}</div></div><div class="card"><div class="label">Deploying</div><div class="value">${x.pending||0}</div></div><div class="card"><div class="label">Drift</div><div class="value">${x.drift||0}</div></div></section><section class="table"><table><thead><tr><th>Worker</th><th>State</th><th>Running commit</th><th>GitHub main</th><th>Version</th><th>Assessment</th></tr></thead><tbody>${rows}</tbody></table></section><footer><a href="/">← Curator Ops</a> · Ocean Liner Curator</footer></main></body></html>`;
-}
-
-function shortSha(value){return value?String(value).slice(0,8):'—';}
-function escapeHtml(value){return String(value??'').replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c]));}
-function requireKv(env){if(!env[KV])throw new Error(`${KV} KV binding is not configured.`);}
-function json(value,status=200){return new Response(JSON.stringify(value,null,2),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','access-control-allow-origin':'*'}});}
-function html(value){return new Response(value,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store'}});}
+async function fetchGitHubHead(repository,env){const result=await fetchJson(`https://api.github.com/repos/${repository}/commits/main`,'CuratorOps/1.2',env,false);if(!result.ok)return result;const p=result.data;return{ok:true,data:{sha:p?.sha||null,committedAt:p?.commit?.committer?.date||p?.commit?.author?.date||null,message:String(p?.commit?.message||'').split('\n')[0].slice(0,300)}}}
+async function fetchJson(url,userAgent,env,useAccess){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),REQUEST_TIMEOUT_MS);try{const target=new URL(url);target.searchParams.set('ops',Date.now().toString());const headers={accept:'application/vnd.github+json, application/json','user-agent':userAgent};if(useAccess)Object.assign(headers,accessHeaders(env,target));const response=await fetch(target.href,{method:'GET',redirect:'follow',cache:'no-store',headers,signal:controller.signal,cf:{cacheTtl:0,cacheEverything:false}});if(!response.ok)return{ok:false,error:`HTTP ${response.status}`};return{ok:true,data:await response.json()}}catch(error){return{ok:false,error:error?.name==='AbortError'?'timeout':(error?.message||String(error))}}finally{clearTimeout(timer)}}
+function accessHeaders(env,target){if(!env.CF_ACCESS_CLIENT_ID||!env.CF_ACCESS_CLIENT_SECRET)return{};let host='';try{host=(target instanceof URL?target:new URL(target)).hostname.toLowerCase()}catch{return{}}const owned=host==='oceanliners.net'||host.endsWith('.oceanliners.net')||host==='oceanlinercurator.com'||host.endsWith('.oceanlinercurator.com');if(!owned)return{};return{'CF-Access-Client-Id':env.CF_ACCESS_CLIENT_ID,'CF-Access-Client-Secret':env.CF_ACCESS_CLIENT_SECRET}}
+async function readDriftSnapshot(env){requireKv(env);return await env[KV].get(DRIFT_SNAPSHOT_KEY,'json')||{generatedAt:null,source:null,graceMinutes:15,summary:{total:RUNTIMES.length,inSync:0,pending:0,drift:0,unknown:RUNTIMES.length,status:'unknown'},services:RUNTIMES.map(x=>({id:x.id,name:x.name,repository:x.repository,state:'unknown'}))}}
+function renderDeployments(snapshot){const rows=(snapshot.services||[]).map(s=>`<tr><td><span class="dot ${escapeHtml(s.state)}"></span>${escapeHtml(s.name)}</td><td>${escapeHtml(s.state)}</td><td><code>${shortSha(s.running?.commit)}</code></td><td><code>${shortSha(s.github?.commit)}</code></td><td>${escapeHtml(s.running?.version||'—')}</td><td>${escapeHtml(s.message||'')}</td></tr>`).join(''),x=snapshot.summary||{};return`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Deployments · Curator Ops</title><style>:root{color-scheme:dark;--bg:#0a1110;--panel:#101918;--brass:#bfa46a;--text:#f3eee3;--muted:#9aa6a0;--line:#263330}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% -20%,#17221f 0,#0a1110 52%);color:var(--text);font-family:Georgia,'Times New Roman',serif;min-height:100vh}.wrap{max-width:1150px;margin:auto;padding:58px 20px}.eyebrow{font:600 12px system-ui,sans-serif;letter-spacing:.18em;text-transform:uppercase;color:var(--brass)}h1{font-size:clamp(38px,7vw,62px);font-weight:400;margin:.2em 0}.lede{color:#d3d6d1;font-size:18px;line-height:1.6;max-width:800px}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:28px 0}.card,.table{border:1px solid var(--line);background:rgba(16,25,24,.84);border-radius:16px}.card{padding:18px}.label{font:600 11px system-ui,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}.value{font-size:28px;margin-top:8px}.table{overflow:auto}table{width:100%;border-collapse:collapse;min-width:900px;font:14px system-ui,sans-serif}th,td{text-align:left;padding:14px 15px;border-bottom:1px solid var(--line)}th{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:9px}.in-sync{background:#58c77a}.pending{background:#d6ad58}.drift{background:#d86666}.unknown{background:#8b9490}code{color:#e9d49e}a{color:#e9d49e}</style></head><body><main class="wrap"><div class="eyebrow">CuratorOS · Deployment Truth</div><h1>Deployment Drift</h1><p class="lede">Compares GitHub main with the commit stamped into each Worker actually serving traffic. A ${snapshot.graceMinutes||15}-minute grace period suppresses normal deployment propagation.</p><section class="cards"><div class="card"><div class="label">State</div><div class="value">${escapeHtml(x.status||'unknown')}</div></div><div class="card"><div class="label">In sync</div><div class="value">${x.inSync||0}</div></div><div class="card"><div class="label">Deploying</div><div class="value">${x.pending||0}</div></div><div class="card"><div class="label">Drift</div><div class="value">${x.drift||0}</div></div></section><section class="table"><table><thead><tr><th>Worker</th><th>State</th><th>Running commit</th><th>GitHub main</th><th>Version</th><th>Assessment</th></tr></thead><tbody>${rows}</tbody></table></section><footer><a href="/">← Curator Ops</a></footer></main></body></html>`}
+function shortSha(v){return v?String(v).slice(0,8):'—'}function escapeHtml(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}function requireKv(env){if(!env[KV])throw new Error(`${KV} KV binding is not configured.`)}function json(v,s=200){return new Response(JSON.stringify(v,null,2),{status:s,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','access-control-allow-origin':'*'}})}function html(v){return new Response(v,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store'}})}
