@@ -1,0 +1,14 @@
+name = "ops"
+main = "src/index.js"
+compatibility_date = "2026-08-12"
+workers_dev = true
+
+[[kv_namespaces]]
+binding = "CURATOR_OPS_RECORDS"
+id = "747c318b62fa479aa486130011d5670d"
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[observability]
+enabled = true
