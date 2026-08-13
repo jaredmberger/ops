@@ -43,8 +43,8 @@ async function collectDeploymentDrift(env, source) {
   const services = [];
 
   for (const service of RUNTIMES) {
-    const runtime = await fetchJson(service.runtimeUrl, 'CuratorOps-Drift/1.2');
-    const github = await fetchGitHubHead(service.repository);
+    const runtime = await fetchJson(service.runtimeUrl, 'CuratorOps-Drift/1.2', env, true);
+    const github = await fetchGitHubHead(service.repository, env);
     services.push(classify(service, runtime, github));
   }
 
@@ -59,6 +59,7 @@ async function collectDeploymentDrift(env, source) {
     generatedAt:new Date().toISOString(),
     source,
     graceMinutes:Math.round(DEPLOY_GRACE_MS/60000),
+    accessServiceAuthConfigured:Boolean(env.CF_ACCESS_CLIENT_ID && env.CF_ACCESS_CLIENT_SECRET),
     summary:{
       total:services.length,
       ...counts,
@@ -122,8 +123,8 @@ function classify(service, runtimeResult, githubResult) {
   };
 }
 
-async function fetchGitHubHead(repository) {
-  const result = await fetchJson(`https://api.github.com/repos/${repository}/commits/main`, 'CuratorOps/1.2');
+async function fetchGitHubHead(repository, env) {
+  const result = await fetchJson(`https://api.github.com/repos/${repository}/commits/main`, 'CuratorOps/1.2', env, false);
   if (!result.ok) return result;
   const payload=result.data;
   return {
@@ -136,13 +137,17 @@ async function fetchGitHubHead(repository) {
   };
 }
 
-async function fetchJson(url, userAgent) {
+async function fetchJson(url, userAgent, env, useAccess) {
   const controller=new AbortController();
   const timer=setTimeout(()=>controller.abort(),REQUEST_TIMEOUT_MS);
   try {
-    const response=await fetch(`${url}${url.includes('?')?'&':'?'}ops=${Date.now()}`,{
+    const target = new URL(url);
+    target.searchParams.set('ops', Date.now().toString());
+    const headers={accept:'application/vnd.github+json, application/json','user-agent':userAgent};
+    if (useAccess) Object.assign(headers, accessHeaders(env, target));
+    const response=await fetch(target.href,{
       method:'GET',redirect:'follow',cache:'no-store',
-      headers:{accept:'application/vnd.github+json, application/json','user-agent':userAgent},
+      headers,
       signal:controller.signal,
       cf:{cacheTtl:0,cacheEverything:false}
     });
@@ -151,6 +156,18 @@ async function fetchJson(url, userAgent) {
   } catch(error) {
     return {ok:false,error:error?.name==='AbortError'?'timeout':(error?.message||String(error))};
   } finally { clearTimeout(timer); }
+}
+
+function accessHeaders(env, target) {
+  if (!env.CF_ACCESS_CLIENT_ID || !env.CF_ACCESS_CLIENT_SECRET) return {};
+  let host='';
+  try { host=(target instanceof URL ? target : new URL(target)).hostname.toLowerCase(); } catch { return {}; }
+  const owned = host === 'oceanliners.net' || host.endsWith('.oceanliners.net') || host === 'oceanlinercurator.com' || host.endsWith('.oceanlinercurator.com');
+  if (!owned) return {};
+  return {
+    'CF-Access-Client-Id': env.CF_ACCESS_CLIENT_ID,
+    'CF-Access-Client-Secret': env.CF_ACCESS_CLIENT_SECRET
+  };
 }
 
 async function readDriftSnapshot(env) {
@@ -171,7 +188,7 @@ function renderDeployments(snapshot) {
 }
 
 function shortSha(value){return value?String(value).slice(0,8):'—';}
-function escapeHtml(value){return String(value??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
+function escapeHtml(value){return String(value??'').replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c]));}
 function requireKv(env){if(!env[KV])throw new Error(`${KV} KV binding is not configured.`);}
 function json(value,status=200){return new Response(JSON.stringify(value,null,2),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','access-control-allow-origin':'*'}});}
 function html(value){return new Response(value,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store'}});}
