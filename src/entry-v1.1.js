@@ -19,7 +19,7 @@ export default {
       return json({
         ok:true,
         service:'Curator Ops',
-        version:'1.1.0',
+        version:'1.1.1',
         repository:'jaredmberger/ops',
         runtime:'cloudflare-workers',
         cloudflareVersion:{
@@ -27,6 +27,7 @@ export default {
           tag:meta.tag || null,
           timestamp:meta.timestamp || null
         },
+        accessServiceAuthConfigured:Boolean(env.CF_ACCESS_CLIENT_ID && env.CF_ACCESS_CLIENT_SECRET),
         observedAt:new Date().toISOString()
       });
     }
@@ -53,12 +54,13 @@ export default {
 async function collectRuntimeIdentities(env, source) {
   requireKv(env);
   const services = [];
-  for (const runtime of RUNTIMES) services.push(await probeRuntime(runtime));
+  for (const runtime of RUNTIMES) services.push(await probeRuntime(runtime, env));
 
   const identified = services.filter(x => x.ok && x.cloudflareVersion?.id).length;
   const snapshot = {
     generatedAt:new Date().toISOString(),
     source,
+    accessServiceAuthConfigured:Boolean(env.CF_ACCESS_CLIENT_ID && env.CF_ACCESS_CLIENT_SECRET),
     summary:{ total:services.length, identified, missing:services.length-identified, status:identified===services.length?'healthy':'attention' },
     services
   };
@@ -69,16 +71,22 @@ async function collectRuntimeIdentities(env, source) {
   return snapshot;
 }
 
-async function probeRuntime(service) {
+async function probeRuntime(service, env) {
   const started = Date.now();
   const controller = new AbortController();
   const timer = setTimeout(()=>controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const response = await fetch(`${service.url}?opsRuntime=${Date.now()}`, {
+    const target = new URL(service.url);
+    target.searchParams.set('opsRuntime', Date.now().toString());
+    const response = await fetch(target.href, {
       method:'GET',
       redirect:'follow',
       cache:'no-store',
-      headers:{ accept:'application/json', 'user-agent':'CuratorOps-Runtime/1.1 (+https://ops.oceanlinercurator.com)' },
+      headers:{
+        accept:'application/json',
+        'user-agent':'CuratorOps-Runtime/1.1 (+https://ops.oceanlinercurator.com)',
+        ...accessHeaders(env, target)
+      },
       signal:controller.signal,
       cf:{ cacheTtl:0, cacheEverything:false }
     });
@@ -93,6 +101,7 @@ async function probeRuntime(service) {
       version:payload.version || null,
       runtime:payload.runtime || null,
       cloudflareVersion:payload.cloudflareVersion || null,
+      build:payload.build || null,
       observedAt:payload.observedAt || null,
       checkedAt:new Date().toISOString(),
       durationMs:Date.now()-started
@@ -110,6 +119,18 @@ async function probeRuntime(service) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+function accessHeaders(env, target) {
+  if (!env.CF_ACCESS_CLIENT_ID || !env.CF_ACCESS_CLIENT_SECRET) return {};
+  let host='';
+  try { host=(target instanceof URL ? target : new URL(target)).hostname.toLowerCase(); } catch { return {}; }
+  const owned = host === 'oceanliners.net' || host.endsWith('.oceanliners.net') || host === 'oceanlinercurator.com' || host.endsWith('.oceanlinercurator.com');
+  if (!owned) return {};
+  return {
+    'CF-Access-Client-Id': env.CF_ACCESS_CLIENT_ID,
+    'CF-Access-Client-Secret': env.CF_ACCESS_CLIENT_SECRET
+  };
 }
 
 async function readRuntimeSnapshot(env) {
