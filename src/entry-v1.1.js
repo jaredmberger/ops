@@ -14,7 +14,7 @@ const RUNTIMES = [
   { id:'indexer', name:'Curator Indexer', url:'https://curator-indexer.oceanliners.net/api/runtime', repository:'jaredmberger/curator-indexer' },
   { id:'search-intelligence', name:'Search Intelligence', url:'https://search-intelligence.oceanliners.net/api/runtime', repository:'jaredmberger/search-intelligence' },
   { id:'analytics', name:'Curator Analytics', url:'https://analytics.oceanliners.net/api/runtime', repository:'jaredmberger/analytics' },
-  { id:'content-opportunity', name:'Content Opportunity', url:'https://content-opportunity.oceanliners.net/api/runtime', repository:'jaredmberger/content-opportunity' }
+  { id:'content-opportunity', name:'Content Opportunity', url:'https://content.oceanliners.net/api/runtime', repository:'jaredmberger/content-opportunity' }
 ];
 
 export default {
