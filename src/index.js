@@ -37,8 +37,9 @@ export default {
       return json({
         ok:true,
         service:'Curator Ops',
-        version:'1.0.0',
+        version:'1.0.1',
         generatedAt:new Date().toISOString(),
+        accessServiceAuthConfigured:Boolean(env.CF_ACCESS_CLIENT_ID && env.CF_ACCESS_CLIENT_SECRET),
         snapshot
       });
     }
@@ -74,15 +75,15 @@ export default {
 
 async function runChecks(env, source) {
   requireKv(env);
-  const startedAt = new Date().toISOString();
   const results = [];
-  for (const service of SERVICES) results.push(await probe(service));
+  for (const service of SERVICES) results.push(await probe(service, env));
 
   const healthy = results.filter(x => x.ok).length;
   const degraded = results.length - healthy;
   const snapshot = {
     generatedAt:new Date().toISOString(),
     source,
+    accessServiceAuthConfigured:Boolean(env.CF_ACCESS_CLIENT_ID && env.CF_ACCESS_CLIENT_SECRET),
     summary:{ total:results.length, healthy, degraded, status:degraded ? 'attention' : 'healthy' },
     services:results
   };
@@ -94,14 +95,13 @@ async function runChecks(env, source) {
   return snapshot;
 }
 
-async function probe(service) {
+async function probe(service, env) {
   const started = Date.now();
   const controller = new AbortController();
   const timer = setTimeout(()=>controller.abort(), REQUEST_TIMEOUT_MS);
   let status = null;
   let finalUrl = null;
   let contentType = null;
-  let error = null;
   try {
     const target = new URL(service.url);
     target.searchParams.set('opsProbe', Date.now().toString());
@@ -109,21 +109,36 @@ async function probe(service) {
       method:'GET',
       redirect:'follow',
       cache:'no-store',
-      headers:{ 'user-agent':'CuratorOps/1.0 (+https://ops.oceanlinercurator.com)', accept:'text/html,application/json,*/*;q=0.8' },
+      headers:{
+        'user-agent':'CuratorOps/1.0 (+https://ops.oceanlinercurator.com)',
+        accept:'text/html,application/json,*/*;q=0.8',
+        ...accessHeaders(env, target)
+      },
       signal:controller.signal,
       cf:{ cacheTtl:0, cacheEverything:false }
     });
     status = response.status;
     finalUrl = response.url;
     contentType = response.headers.get('content-type');
-    const ok = response.ok;
-    return { id:service.id, name:service.name, kind:service.kind, url:service.url, ok, status, finalUrl, contentType, durationMs:Date.now()-started, checkedAt:new Date().toISOString() };
+    return { id:service.id, name:service.name, kind:service.kind, url:service.url, ok:response.ok, status, finalUrl, contentType, durationMs:Date.now()-started, checkedAt:new Date().toISOString() };
   } catch (err) {
-    error = err?.name === 'AbortError' ? 'timeout' : String(err?.message || err || 'fetch failed');
+    const error = err?.name === 'AbortError' ? 'timeout' : String(err?.message || err || 'fetch failed');
     return { id:service.id, name:service.name, kind:service.kind, url:service.url, ok:false, status, finalUrl, contentType, error, durationMs:Date.now()-started, checkedAt:new Date().toISOString() };
   } finally {
     clearTimeout(timer);
   }
+}
+
+function accessHeaders(env, target) {
+  if (!env.CF_ACCESS_CLIENT_ID || !env.CF_ACCESS_CLIENT_SECRET) return {};
+  let host='';
+  try { host=(target instanceof URL ? target : new URL(target)).hostname.toLowerCase(); } catch { return {}; }
+  const owned = host === 'oceanliners.net' || host.endsWith('.oceanliners.net') || host === 'oceanlinercurator.com' || host.endsWith('.oceanlinercurator.com');
+  if (!owned) return {};
+  return {
+    'CF-Access-Client-Id': env.CF_ACCESS_CLIENT_ID,
+    'CF-Access-Client-Secret': env.CF_ACCESS_CLIENT_SECRET
+  };
 }
 
 async function readSnapshot(env) {
@@ -203,4 +218,4 @@ function renderHome(snapshot){
   </style></head><body><main class="wrap"><div class="eyebrow">CuratorOS · Operational Control Plane</div><h1>Curator Ops</h1><p class="lede">Tracks the machinery behind CuratorOS: service reachability, runtime freshness, deployment reports, and operational drift. It does not judge site content.</p><section class="cards"><div class="card"><div class="label">Overall</div><div class="value">${escapeHtml(summary.status || 'unknown')}</div></div><div class="card"><div class="label">Healthy</div><div class="value">${summary.healthy ?? 0}/${summary.total ?? SERVICES.length}</div></div><div class="card"><div class="label">Last snapshot</div><div class="value" style="font-size:18px">${snapshot.generatedAt ? new Date(snapshot.generatedAt).toLocaleString() : 'Waiting for first check'}</div></div></section><section class="table"><table><thead><tr><th>Service</th><th>HTTP</th><th>Latency</th><th>Checked</th></tr></thead><tbody>${rows}</tbody></table></section><footer>Ocean Liner Curator · CuratorOS Operations Layer</footer></main></body></html>`;
 }
 
-function escapeHtml(value){ return String(value ?? '').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
+function escapeHtml(value){ return String(value ?? '').replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c])); }
