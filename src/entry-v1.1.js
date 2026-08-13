@@ -7,7 +7,12 @@ const REQUEST_TIMEOUT_MS = 10000;
 
 const RUNTIMES = [
   { id:'error-bus', name:'Error Bus', url:'https://errors.oceanliners.net/api/runtime', repository:'jaredmberger/errors' },
-  { id:'verify', name:'Curator Verify', url:'https://verify.oceanlinercurator.com/api/runtime', repository:'jaredmberger/verify' }
+  { id:'verify', name:'Curator Verify', url:'https://verify.oceanlinercurator.com/api/runtime', repository:'jaredmberger/verify' },
+  { id:'site-health', name:'Site Health', url:'https://site-health.oceanliners.net/api/runtime', repository:'jaredmberger/site-health' },
+  { id:'integrity', name:'Curator Integrity', url:'https://integrity.oceanliners.net/api/runtime', repository:'jaredmberger/curator-integrity' },
+  { id:'speed', name:'Curator Speed', url:'https://speed.oceanliners.net/api/runtime', repository:'jaredmberger/speed' },
+  { id:'indexer', name:'Curator Indexer', url:'https://curator-indexer.oceanliners.net/api/runtime', repository:'jaredmberger/curator-indexer' },
+  { id:'search-intelligence', name:'Search Intelligence', url:'https://search-intelligence.oceanliners.net/api/runtime', repository:'jaredmberger/search-intelligence' }
 ];
 
 export default {
@@ -19,7 +24,7 @@ export default {
       return json({
         ok:true,
         service:'Curator Ops',
-        version:'1.1.1',
+        version:'1.1.2',
         repository:'jaredmberger/ops',
         runtime:'cloudflare-workers',
         cloudflareVersion:{
@@ -84,7 +89,7 @@ async function probeRuntime(service, env) {
       cache:'no-store',
       headers:{
         accept:'application/json',
-        'user-agent':'CuratorOps-Runtime/1.1 (+https://ops.oceanlinercurator.com)',
+        'user-agent':'CuratorOps-Runtime/1.2 (+https://ops.oceanlinercurator.com)',
         ...accessHeaders(env, target)
       },
       signal:controller.signal,
