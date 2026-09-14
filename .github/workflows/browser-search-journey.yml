@@ -2,6 +2,11 @@ name: Browser Search Journey
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/browser-search-journey.yml'
+      - 'synthetics/browser-search-journey.mjs'
   schedule:
     - cron: '7,22,37,52 * * * *'
 
