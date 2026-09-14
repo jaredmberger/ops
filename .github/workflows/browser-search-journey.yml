@@ -35,3 +35,4 @@ jobs:
         run: xvfb-run -a node synthetics/browser-search-journey.mjs
         env:
           TARGET_URL: https://oceanliners.net/
+          CURATOR_SYNTHETIC_TOKEN: ${{ secrets.CURATOR_SYNTHETIC_TOKEN }}
