@@ -32,6 +32,6 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Run browser search journey
-        run: node synthetics/browser-search-journey.mjs
+        run: xvfb-run -a node synthetics/browser-search-journey.mjs
         env:
           TARGET_URL: https://oceanliners.net/
