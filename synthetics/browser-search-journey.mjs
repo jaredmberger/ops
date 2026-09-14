@@ -3,7 +3,7 @@ import { chromium } from 'playwright';
 const TARGET = process.env.TARGET_URL || 'https://oceanliners.net/';
 const SEARCH_TERM = 'Titanic';
 
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({ headless: false });
 const page = await browser.newPage({
   viewport: { width: 1365, height: 900 }
 });
