@@ -5,6 +5,7 @@ const ERROR_KV='CURATOR_ERROR_RECORDS';
 const REACHABILITY_KEY='snapshot:latest';
 const DRIFT_KEY='deployment-drift:latest';
 const FRESHNESS_KEY='scheduled-freshness:latest';
+const JOURNEY_KEY='public-site-journey:latest';
 const BRIDGE_KEY='error-bus-bridge:latest';
 const INCIDENT_PREFIX='incident:';
 const EVENT_PREFIX='event:';
@@ -26,10 +27,11 @@ export default{
 
 async function reconcile(env,source){
   requireBindings(env);
-  const [reachability,drift,freshness]=await Promise.all([
+  const [reachability,drift,freshness,journey]=await Promise.all([
     env[OPS_KV].get(REACHABILITY_KEY,'json'),
     env[OPS_KV].get(DRIFT_KEY,'json'),
-    env[OPS_KV].get(FRESHNESS_KEY,'json')
+    env[OPS_KV].get(FRESHNESS_KEY,'json'),
+    env[OPS_KV].get(JOURNEY_KEY,'json')
   ]);
 
   const desired=[];
@@ -63,6 +65,14 @@ async function reconcile(env,source){
       context:{serviceId:s.id,lastSuccessAt:s.lastSuccessAt??null,ageMinutes:s.ageMinutes??null,maxAgeMinutes:s.maxAgeMinutes??null,schedule:compactSchedule(s.schedule)}
     });
   }
+  if(journey?.effectiveState==='persistent')desired.push({
+    fingerprint:'ops-public-site-journey',
+    component:'synthetic:public-site-journey',
+    type:'ops-synthetic-journey-failure',
+    severity:'p1',
+    message:`Public Site Journey has failed ${Number(journey.failureStreak||3)} consecutive Curator Ops checks.`,
+    context:{failureStreak:journey.failureStreak??null,firstFailureAt:journey.firstFailureAt??null,lastFailureAt:journey.lastFailureAt??null,lastHealthyAt:journey.lastHealthyAt??null,failedSteps:Array.isArray(journey?.summary?.failedSteps)?journey.summary.failedSteps.join(', '):null}
+  });
 
   const desiredMap=new Map(desired.map(x=>[x.fingerprint,x]));
   const managed=await listManagedIncidents(env);
