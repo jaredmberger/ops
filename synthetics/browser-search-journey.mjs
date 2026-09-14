@@ -2,10 +2,25 @@ import { chromium } from 'playwright';
 
 const TARGET = process.env.TARGET_URL || 'https://oceanliners.net/';
 const SEARCH_TERM = 'Titanic';
+const SYNTHETIC_TOKEN = process.env.CURATOR_SYNTHETIC_TOKEN || '';
+
+if (!SYNTHETIC_TOKEN) {
+  throw new Error('CURATOR_SYNTHETIC_TOKEN is required for the browser search journey.');
+}
 
 const browser = await chromium.launch({ headless: false });
 const page = await browser.newPage({
   viewport: { width: 1365, height: 900 }
+});
+
+await page.route('**/tools/search/pagefind/**', async route => {
+  const request = route.request();
+  await route.continue({
+    headers: {
+      ...request.headers(),
+      'x-curator-synthetic': SYNTHETIC_TOKEN
+    }
+  });
 });
 
 const started = Date.now();
