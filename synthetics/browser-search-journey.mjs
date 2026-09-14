@@ -6,12 +6,12 @@ const SEARCH_TERM = 'Titanic';
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({
   viewport: { width: 1365, height: 900 },
-  userAgent: 'CuratorOps-BrowserJourney/1.1 (+https://ops.oceanlinercurator.com)'
+  userAgent: 'CuratorOps-BrowserJourney/1.2 (+https://ops.oceanlinercurator.com)'
 });
 
 const started = Date.now();
 const steps = [];
-const diagnostics = { consoleErrors: [], pageErrors: [], failedRequests: [], searchStatus: null };
+const diagnostics = { consoleErrors: [], pageErrors: [], failedRequests: [], pagefindResponses: [], searchStatus: null };
 
 page.on('console', message => {
   if (message.type() === 'error' || message.type() === 'warning') {
@@ -23,6 +23,16 @@ page.on('requestfailed', request => {
   const url = request.url();
   if (/oceanliners\.net|pagefind|search/i.test(url)) {
     diagnostics.failedRequests.push({ url, error: request.failure()?.errorText || 'request failed' });
+  }
+});
+page.on('response', response => {
+  const url = response.url();
+  if (/\/tools\/search\/pagefind\//i.test(url)) {
+    diagnostics.pagefindResponses.push({
+      url,
+      status: response.status(),
+      contentType: response.headers()['content-type'] || null
+    });
   }
 });
 
