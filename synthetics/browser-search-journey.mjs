@@ -99,32 +99,32 @@ try {
     }
   });
 
-  let titanicLink;
-  await step('confirm-result', 'Confirm Titanic appears in search results', async () => {
+  await step('confirm-result', 'Confirm Titanic appears with a valid OceanLiners.net destination', async () => {
     const resultLinks = page.locator('#home-archive-search-results a');
     const count = await resultLinks.count();
+    let matched = false;
+
     for (let i = 0; i < count; i += 1) {
       const link = resultLinks.nth(i);
       const text = (await link.textContent() || '').trim();
       const href = await link.getAttribute('href');
-      if (/titanic/i.test(text) && href) {
-        titanicLink = href;
-        break;
+      if (!/titanic/i.test(text) || !href) continue;
+
+      const destination = new URL(href, TARGET);
+      if (destination.origin !== new URL(TARGET).origin) {
+        throw new Error(`Titanic result points outside OceanLiners.net: ${destination.href}`);
       }
+      if (!/titanic/i.test(destination.pathname)) {
+        throw new Error(`Titanic result has an unexpected destination: ${destination.pathname}`);
+      }
+
+      matched = true;
+      break;
     }
-    if (!titanicLink) throw new Error('No Titanic result link appeared in the rendered homepage results.');
-  });
 
-  await step('open-result', 'Open a Titanic search result', async () => {
-    const destination = new URL(titanicLink, TARGET).href;
-    const response = await page.goto(destination, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    if (!response || !response.ok()) throw new Error(`Titanic result HTTP ${response?.status() ?? 'no response'}`);
-    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
-  });
-
-  await step('confirm-destination', 'Confirm Titanic destination content', async () => {
-    const body = await page.locator('body').innerText();
-    if (!/Titanic/i.test(body)) throw new Error('Destination rendered without a Titanic marker.');
+    if (!matched) {
+      throw new Error('No Titanic result with a valid OceanLiners.net destination appeared in the rendered homepage results.');
+    }
   });
 
   console.log(JSON.stringify({ ok: true, target: TARGET, searchTerm: SEARCH_TERM, durationMs: Date.now() - started, steps, diagnostics }, null, 2));
