@@ -5,8 +5,7 @@ const SEARCH_TERM = 'Titanic';
 
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({
-  viewport: { width: 1365, height: 900 },
-  userAgent: 'CuratorOps-BrowserJourney/1.2 (+https://ops.oceanlinercurator.com)'
+  viewport: { width: 1365, height: 900 }
 });
 
 const started = Date.now();
