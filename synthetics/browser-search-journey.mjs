@@ -1,0 +1,77 @@
+import { chromium } from 'playwright';
+
+const TARGET = process.env.TARGET_URL || 'https://oceanliners.net/';
+const SEARCH_TERM = 'Titanic';
+
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage({
+  viewport: { width: 1365, height: 900 },
+  userAgent: 'CuratorOps-BrowserJourney/1.0 (+https://ops.oceanlinercurator.com)'
+});
+
+const started = Date.now();
+const steps = [];
+
+async function step(id, name, fn) {
+  const t0 = Date.now();
+  try {
+    await fn();
+    steps.push({ id, name, ok: true, durationMs: Date.now() - t0 });
+  } catch (error) {
+    steps.push({ id, name, ok: false, durationMs: Date.now() - t0, error: String(error?.message || error) });
+    throw error;
+  }
+}
+
+try {
+  await step('open-homepage', 'Open homepage', async () => {
+    const response = await page.goto(TARGET, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    if (!response || !response.ok()) throw new Error(`Homepage HTTP ${response?.status() ?? 'no response'}`);
+  });
+
+  await step('find-search', 'Find homepage archive search', async () => {
+    await page.locator('#home-archive-query').waitFor({ state: 'visible', timeout: 15000 });
+    await page.locator('#home-archive-search-form').waitFor({ state: 'visible', timeout: 15000 });
+  });
+
+  await step('run-search', `Search for ${SEARCH_TERM}`, async () => {
+    await page.locator('#home-archive-query').fill(SEARCH_TERM);
+    await page.locator('#home-archive-search-form').locator('button[type="submit"]').click();
+    await page.locator('#home-archive-search-results .home-archive-search__result').first().waitFor({ state: 'visible', timeout: 20000 });
+  });
+
+  let titanicLink;
+  await step('confirm-result', 'Confirm Titanic appears in search results', async () => {
+    const resultLinks = page.locator('#home-archive-search-results a');
+    const count = await resultLinks.count();
+    for (let i = 0; i < count; i += 1) {
+      const link = resultLinks.nth(i);
+      const text = (await link.textContent() || '').trim();
+      const href = await link.getAttribute('href');
+      if (/titanic/i.test(text) && href) {
+        titanicLink = href;
+        break;
+      }
+    }
+    if (!titanicLink) throw new Error('No Titanic result link appeared in the rendered homepage results.');
+  });
+
+  await step('open-result', 'Open a Titanic search result', async () => {
+    const destination = new URL(titanicLink, TARGET).href;
+    const response = await page.goto(destination, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    if (!response || !response.ok()) throw new Error(`Titanic result HTTP ${response?.status() ?? 'no response'}`);
+    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+  });
+
+  await step('confirm-destination', 'Confirm Titanic destination content', async () => {
+    const body = await page.locator('body').innerText();
+    if (!/Titanic/i.test(body)) throw new Error('Destination rendered without a Titanic marker.');
+  });
+
+  console.log(JSON.stringify({ ok: true, target: TARGET, searchTerm: SEARCH_TERM, durationMs: Date.now() - started, steps }, null, 2));
+} catch (error) {
+  console.error(JSON.stringify({ ok: false, target: TARGET, searchTerm: SEARCH_TERM, durationMs: Date.now() - started, error: String(error?.message || error), url: page.url(), steps }, null, 2));
+  process.exitCode = 1;
+} finally {
+  await browser.close();
+}
