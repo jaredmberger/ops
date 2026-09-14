@@ -2,7 +2,7 @@
 
 Curator Ops is the operational control-plane monitor for Ocean Liner Curator / CuratorOS.
 
-It is intentionally separate from content intelligence and site-quality monitoring. Ops tracks the machinery itself: service reachability, operational freshness, deployment reports, GitHub-to-Cloudflare deployment drift, scheduled-work freshness, synthetic visitor-path checks, real-browser search checks, deployment integrity, monitoring-storage self-tests, and persistence-aware escalation into the CuratorOS Error Bus.
+It is intentionally separate from content intelligence and site-quality monitoring. Ops tracks the machinery itself: service reachability, operational freshness, deployment reports, GitHub-to-Cloudflare deployment drift, scheduled-work freshness, synthetic visitor-path checks, real-browser search checks, deployment integrity, meaningful performance anomalies, monitoring-storage self-tests, and persistence-aware escalation into the CuratorOS Error Bus.
 
 ## Production
 
@@ -10,7 +10,7 @@ It is intentionally separate from content intelligence and site-quality monitori
 - Domain: `https://ops.oceanlinercurator.com`
 - Primary KV binding: `CURATOR_OPS_RECORDS`
 - Error Bus bridge KV binding: `CURATOR_ERROR_RECORDS`
-- Current entrypoint: `src/entry-v1.10.js`
+- Current entrypoint: `src/entry-v1.11.js`
 
 ## Current capabilities
 
@@ -21,6 +21,7 @@ It is intentionally separate from content intelligence and site-quality monitori
 - Public Site Journey synthetic monitoring across homepage, shared navigation, homepage search, Pagefind runtime, standalone search, and Titanic destination
 - Browser Search Journey using scheduled Playwright/Chromium against the live homepage search
 - Deployment Integrity monitoring for critical documents/assets, redirects, content types, response size, markers, JSON validity, and error-page substitution
+- Performance Anomaly monitoring using rolling per-path median baselines with conservative thresholds
 - CuratorOS Self-Test that verifies persistence through both the Ops KV and Error Bus KV paths
 - Quiet Ops → Error Bus escalation for persistent operational failures only
 - Automatic Error Bus recovery when Ops sees the condition clear
@@ -30,15 +31,18 @@ It is intentionally separate from content intelligence and site-quality monitori
 - `GET /api/public-site-journey`
 - `GET /api/browser-search-journey`
 - `GET /api/deployment-integrity`
+- `GET /api/performance-anomaly`
 - `GET /api/self-test`
 - `GET /journey`
 - `GET /browser-search-journey`
 - `GET /deployment-integrity`
+- `GET /performance-anomaly`
 - `GET /self-test`
 - `POST /api/check-now`
 - `POST /api/public-site-journey-check-now`
 - `POST /api/browser-search-journey-check-now`
 - `POST /api/deployment-integrity-check-now`
+- `POST /api/performance-anomaly-check-now`
 - `POST /api/self-test-check-now`
 - Authenticated `POST /api/heartbeat`
 - Authenticated `POST /api/deployment`
@@ -89,6 +93,16 @@ Each check verifies the expected HTTP response, content type, minimum response s
 
 A single bad integrity observation is `observing`, a second consecutive bad observation is `degraded`, and a third is `persistent`. Only persistent failure creates an Error Bus incident (`p2`). Recovery is automatic once all integrity checks pass again.
 
+## Performance Anomaly
+
+The performance layer watches four representative successful requests every five minutes: the homepage, shared navigation script, homepage search component, and Titanic destination.
+
+Each path builds its own rolling median from up to 72 recent successful observations. At least 12 successful samples are required before a path is judged, so the monitor begins in `warming` for roughly the first hour after deployment.
+
+A timing observation is considered anomalous only when it is both at least **5× slower than that path's recent median** and at least **1500 ms** in absolute duration. An anomalous sample is excluded from the rolling baseline so a real slowdown does not immediately redefine normal. Failed HTTP requests are not treated as performance anomalies because availability and deployment-integrity monitors already cover those failure classes.
+
+One anomalous observation is `observing`, two consecutive anomalous observations are `degraded`, and three consecutive anomalous observations are `persistent`. Only persistent regression creates a `p2` Error Bus incident. Normal performance automatically recovers the incident.
+
 ## CuratorOS Self-Test
 
 The self-test monitors the monitoring storage paths themselves. Each scheduled run reads the sentinel written by the previous run, verifies that it is recent and structurally valid, and then writes the next sentinel to both `CURATOR_OPS_RECORDS` and `CURATOR_ERROR_RECORDS`.
@@ -105,7 +119,7 @@ Authenticated Ops write requests send `OPS_WRITE_KEY` in the `x-curator-ops-key`
 
 ## Design rule
 
-Ops reports operational truth only when it has evidence. Transient failures are observed quietly. Error Bus escalation is reserved for persistent reachability failures, persistent synthetic-journey failures, persistent browser-search failures or staleness, persistent deployment-integrity failures, persistent monitoring self-test failures, confirmed deployment drift beyond the grace period, and genuinely stale scheduled work.
+Ops reports operational truth only when it has evidence. Transient failures are observed quietly. Error Bus escalation is reserved for persistent reachability failures, persistent synthetic-journey failures, persistent browser-search failures or staleness, persistent deployment-integrity failures, persistent meaningful performance regressions, persistent monitoring self-test failures, confirmed deployment drift beyond the grace period, and genuinely stale scheduled work.
 
 ## Deployment note
 
