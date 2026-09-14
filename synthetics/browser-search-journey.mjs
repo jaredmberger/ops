@@ -6,11 +6,25 @@ const SEARCH_TERM = 'Titanic';
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({
   viewport: { width: 1365, height: 900 },
-  userAgent: 'CuratorOps-BrowserJourney/1.0 (+https://ops.oceanlinercurator.com)'
+  userAgent: 'CuratorOps-BrowserJourney/1.1 (+https://ops.oceanlinercurator.com)'
 });
 
 const started = Date.now();
 const steps = [];
+const diagnostics = { consoleErrors: [], pageErrors: [], failedRequests: [], searchStatus: null };
+
+page.on('console', message => {
+  if (message.type() === 'error' || message.type() === 'warning') {
+    diagnostics.consoleErrors.push(`${message.type()}: ${message.text()}`.slice(0, 1200));
+  }
+});
+page.on('pageerror', error => diagnostics.pageErrors.push(String(error?.message || error).slice(0, 1200)));
+page.on('requestfailed', request => {
+  const url = request.url();
+  if (/oceanliners\.net|pagefind|search/i.test(url)) {
+    diagnostics.failedRequests.push({ url, error: request.failure()?.errorText || 'request failed' });
+  }
+});
 
 async function step(id, name, fn) {
   const t0 = Date.now();
@@ -37,7 +51,28 @@ try {
   await step('run-search', `Search for ${SEARCH_TERM}`, async () => {
     await page.locator('#home-archive-query').fill(SEARCH_TERM);
     await page.locator('#home-archive-search-form').locator('button[type="submit"]').click();
-    await page.locator('#home-archive-search-results .home-archive-search__result').first().waitFor({ state: 'visible', timeout: 20000 });
+
+    const result = page.locator('#home-archive-search-results .home-archive-search__result').first();
+    const status = page.locator('#home-archive-search-status');
+    await Promise.race([
+      result.waitFor({ state: 'visible', timeout: 20000 }),
+      status.waitFor({ state: 'visible', timeout: 20000 })
+        .then(async () => {
+          for (let i = 0; i < 40; i += 1) {
+            const text = (await status.textContent() || '').trim();
+            diagnostics.searchStatus = text;
+            if (/could not load|no results/i.test(text)) throw new Error(`Homepage search reported: ${text}`);
+            if (/result/i.test(text) && !/searching/i.test(text)) return;
+            await page.waitForTimeout(500);
+          }
+          throw new Error(`Homepage search did not finish. Status: ${diagnostics.searchStatus || 'blank'}`);
+        })
+    ]);
+
+    if (!(await result.isVisible().catch(() => false))) {
+      diagnostics.searchStatus = (await status.textContent().catch(() => '') || '').trim();
+      throw new Error(`No rendered search result. Status: ${diagnostics.searchStatus || 'blank'}`);
+    }
   });
 
   let titanicLink;
@@ -68,9 +103,10 @@ try {
     if (!/Titanic/i.test(body)) throw new Error('Destination rendered without a Titanic marker.');
   });
 
-  console.log(JSON.stringify({ ok: true, target: TARGET, searchTerm: SEARCH_TERM, durationMs: Date.now() - started, steps }, null, 2));
+  console.log(JSON.stringify({ ok: true, target: TARGET, searchTerm: SEARCH_TERM, durationMs: Date.now() - started, steps, diagnostics }, null, 2));
 } catch (error) {
-  console.error(JSON.stringify({ ok: false, target: TARGET, searchTerm: SEARCH_TERM, durationMs: Date.now() - started, error: String(error?.message || error), url: page.url(), steps }, null, 2));
+  diagnostics.searchStatus = diagnostics.searchStatus || (await page.locator('#home-archive-search-status').textContent().catch(() => '') || '').trim() || null;
+  console.error(JSON.stringify({ ok: false, target: TARGET, searchTerm: SEARCH_TERM, durationMs: Date.now() - started, error: String(error?.message || error), url: page.url(), steps, diagnostics }, null, 2));
   process.exitCode = 1;
 } finally {
   await browser.close();
