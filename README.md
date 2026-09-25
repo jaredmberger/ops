@@ -10,7 +10,7 @@ It is intentionally separate from content intelligence and site-quality monitori
 - Domain: `https://ops.oceanlinercurator.com`
 - Primary KV binding: `CURATOR_OPS_RECORDS`
 - Error Bus bridge KV binding: `CURATOR_ERROR_RECORDS`
-- Current entrypoint: `src/entry-v1.17.js`
+- Current entrypoint: `src/entry-v1.18.js`
 
 ## Current capabilities
 
@@ -35,8 +35,10 @@ It is intentionally separate from content intelligence and site-quality monitori
 - Bounded security telemetry for honeypot/sensor events with 1-hour / 24-hour / 7-day counts and burst detection, deliberately kept separate from Error Bus incident severity
 - Current Briefing that condenses service health, deployments, scheduled work, correlated incidents, history, devices, and security into one operational readout
 - Evidence-first “Why is this red?” diagnostic engine that explains confirmed upstream causes, downstream symptoms, independent findings, supporting evidence, and recent-but-unproven deployment correlations
+- Stable homepage extension anchors plus a normalized navigation surface for every major operational view
+- Pull-request smoke validation for JavaScript syntax, active import-chain integrity, wrangler entrypoint existence, and README/production-entrypoint agreement
 - Quiet Ops → Error Bus escalation for persistent operational failures only
-- Automatic Error Bus recovery when Ops sees the condition clear
+- Evidence-based Error Bus recovery: bridge-managed incidents require three consecutive clean reconciliation passes; specialist monitors retain their own recovery contracts
 - Human-readable fleet dashboard
 - `GET /api/status`
 - `GET /api/error-bus-bridge`
@@ -188,7 +190,7 @@ Curator Ops also maintains one compact daily operational bucket. Every scheduled
 - maximum number of correlated duplicate signals
 - accumulated root, independent, and downstream-symptom observations
 
-Those daily buckets power efficient **24-hour, 7-day, and 30-day** summaries. Historical rollup coverage begins when this layer is deployed; older retained Error Bus incident/recovery events remain available separately and are included in window event counts where present.
+Timestamped correlation snapshots power the rolling **24-hour** summary; compact daily buckets power the **7-day** and **30-day** summaries. Historical rollup coverage begins when this layer is deployed; older retained Error Bus incident/recovery events remain available separately and are included in window event counts where present. The 24-hour view is bounded by exact snapshot timestamps rather than whole-day bucket boundaries.
 
 ## Device Observability
 
@@ -261,6 +263,19 @@ Authenticated Ops write requests send `OPS_WRITE_KEY` in the `x-curator-ops-key`
 ## Design rule
 
 Ops reports operational truth only when it has evidence. Transient failures are observed quietly. Error Bus escalation is reserved for persistent reachability failures, persistent synthetic-journey failures, persistent browser-search failures or staleness, persistent deployment-integrity failures, persistent meaningful performance regressions, persistent monitoring self-test failures, confirmed deployment drift beyond the grace period, and genuinely stale scheduled work.
+
+## Repository validation
+
+Pull requests and pushes to `main` run `.github/workflows/ops-smoke.yml`.
+
+The smoke gate:
+
+1. syntax-checks every JavaScript / MJS file under `src` and `scripts`
+2. verifies that `wrangler.toml` declares a real production entrypoint
+3. walks the active relative-import chain and verifies every imported source exists
+4. verifies that the README's documented production entrypoint exactly matches `wrangler.toml`
+
+The base homepage also exposes stable `CURATOR_OPS_NAV` and `CURATOR_OPS_CARDS` extension anchors. The final entry layer normalizes homepage navigation against those anchors so newer features no longer depend on replacing links introduced by earlier wrappers.
 
 ## Deployment note
 
