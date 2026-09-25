@@ -10,6 +10,9 @@ const BRIDGE_KEY='error-bus-bridge:latest';
 const INCIDENT_PREFIX='incident:';
 const EVENT_PREFIX='event:';
 const RECOVERED_TTL=60*60*24*180;
+const RECOVERY_PREFIX='recovery-confirmation:';
+const RECOVERY_TTL=60*60*24*7;
+const RECOVERY_CONFIRMATIONS=3;
 
 export default{
   async fetch(request,env,ctx){
@@ -76,21 +79,44 @@ async function reconcile(env,source){
 
   const desiredMap=new Map(desired.map(x=>[x.fingerprint,x]));
   const managed=await listManagedIncidents(env);
-  const opened=[],updated=[],recovered=[];
+  const opened=[],updated=[],recovered=[],recoveryPending=[];
 
   for(const spec of desired){
+    await clearRecoveryConfirmation(env,spec.fingerprint);
     const result=await upsertManagedIncident(env,spec);
     (result.opened?opened:updated).push(result.incident);
   }
   for(const incident of managed){
     if(desiredMap.has(incident.fingerprint))continue;
     if(['active','degraded'].includes(incident.status)){
-      const r=await recoverManagedIncident(env,incident,'Curator Ops verified that the operational condition cleared.');
-      if(r)recovered.push(r);
+      const confirmation=await advanceRecoveryConfirmation(env,incident);
+      if(confirmation.confirmed){
+        const r=await recoverManagedIncident(
+          env,
+          incident,
+          `Curator Ops verified recovery across ${RECOVERY_CONFIRMATIONS} consecutive clean reconciliation passes.`
+        );
+        if(r)recovered.push(r);
+        await clearRecoveryConfirmation(env,incident.fingerprint);
+      }else{
+        recoveryPending.push(confirmation);
+      }
     }
   }
 
-  const snapshot={generatedAt:new Date().toISOString(),source,activeManaged:desired.length,opened:opened.length,updated:updated.length,recovered:recovered.length,status:desired.length?'attention':'healthy',managedFingerprints:desired.map(x=>x.fingerprint)};
+  const snapshot={
+    generatedAt:new Date().toISOString(),
+    source,
+    activeManaged:desired.length,
+    opened:opened.length,
+    updated:updated.length,
+    recovered:recovered.length,
+    recoveryPending:recoveryPending.length,
+    recoveryConfirmationsRequired:RECOVERY_CONFIRMATIONS,
+    pendingRecoveries:recoveryPending,
+    status:desired.length?'attention':recoveryPending.length?'observing':'healthy',
+    managedFingerprints:desired.map(x=>x.fingerprint)
+  };
   await env[OPS_KV].put(BRIDGE_KEY,JSON.stringify(snapshot),{expirationTtl:60*60*24*30});
   return snapshot;
 }
@@ -134,8 +160,40 @@ async function recoverManagedIncident(env,incident,message){
 async function listManagedIncidents(env){
   const listed=await env[ERROR_KV].list({prefix:INCIDENT_PREFIX+'ops-',limit:1000});
   const out=[];
-  for(const k of listed.keys){const v=await env[ERROR_KV].get(k.name,'json');if(v?.source==='Curator Ops')out.push(v)}
+  for(const k of listed.keys){
+    const v=await env[ERROR_KV].get(k.name,'json');
+    if(v?.source==='Curator Ops'&&bridgeOwnsIncident(v))out.push(v);
+  }
   return out;
+}
+
+function bridgeOwnsIncident(incident){
+  const fingerprint=String(incident?.fingerprint||'');
+  return fingerprint==='ops-public-site-journey'||
+    fingerprint.startsWith('ops-reachability-')||
+    fingerprint.startsWith('ops-deployment-drift-')||
+    fingerprint.startsWith('ops-scheduled-stale-');
+}
+
+async function advanceRecoveryConfirmation(env,incident){
+  const key=RECOVERY_PREFIX+incident.fingerprint;
+  const prior=await env[OPS_KV].get(key,'json');
+  const now=new Date().toISOString();
+  const record={
+    fingerprint:incident.fingerprint,
+    incidentId:incident.id||null,
+    cleanStreak:Number(prior?.cleanStreak||0)+1,
+    required:RECOVERY_CONFIRMATIONS,
+    firstCleanAt:prior?.firstCleanAt||now,
+    lastCleanAt:now
+  };
+  record.confirmed=record.cleanStreak>=RECOVERY_CONFIRMATIONS;
+  await env[OPS_KV].put(key,JSON.stringify(record),{expirationTtl:RECOVERY_TTL});
+  return record;
+}
+
+async function clearRecoveryConfirmation(env,fingerprint){
+  await env[OPS_KV].delete(RECOVERY_PREFIX+fingerprint);
 }
 
 async function writeEvent(env,kind,incident){
@@ -146,7 +204,7 @@ async function writeEvent(env,kind,incident){
 
 async function readBridge(env){
   requireBindings(env);
-  return await env[OPS_KV].get(BRIDGE_KEY,'json')||{generatedAt:null,source:null,activeManaged:0,opened:0,updated:0,recovered:0,status:'warming',managedFingerprints:[]};
+  return await env[OPS_KV].get(BRIDGE_KEY,'json')||{generatedAt:null,source:null,activeManaged:0,opened:0,updated:0,recovered:0,recoveryPending:0,recoveryConfirmationsRequired:RECOVERY_CONFIRMATIONS,pendingRecoveries:[],status:'warming',managedFingerprints:[]};
 }
 function compactSchedule(v){if(!v||typeof v!=='object')return null;const out={};for(const [k,x] of Object.entries(v).slice(0,8)){if(x==null||['string','number','boolean'].includes(typeof x))out[k]=x}return out}
 function sanitize(v){if(!v||typeof v!=='object'||Array.isArray(v))return{};const out={};for(const [k,x] of Object.entries(v).slice(0,30)){if(/token|secret|password|authorization|cookie/i.test(k))continue;if(x==null||['string','number','boolean'].includes(typeof x))out[String(k).slice(0,80)]=typeof x==='string'?x.slice(0,4000):x}return out}
