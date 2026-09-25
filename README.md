@@ -10,7 +10,7 @@ It is intentionally separate from content intelligence and site-quality monitori
 - Domain: `https://ops.oceanlinercurator.com`
 - Primary KV binding: `CURATOR_OPS_RECORDS`
 - Error Bus bridge KV binding: `CURATOR_ERROR_RECORDS`
-- Current entrypoint: `src/entry-v1.13.js`
+- Current entrypoint: `src/entry-v1.14.js`
 
 ## Current capabilities
 
@@ -25,7 +25,10 @@ It is intentionally separate from content intelligence and site-quality monitori
 - CuratorOS Self-Test that verifies persistence through both the Ops KV and Error Bus KV paths
 - Dependency-aware Operational State that correlates reachability, scheduled freshness, deployment truth, synthetic monitors, browser dispatch state, and repository integrity
 - Per-monitor snapshot freshness thresholds so a technically reachable monitor cannot silently stop reporting
-- Root-cause classification that labels active findings as `root`, `independent`, or downstream `symptom` without yet suppressing the underlying evidence
+- Root-cause classification that labels active findings as `root`, `independent`, or downstream `symptom` without suppressing the underlying evidence
+- Correlated Incident Groups that present multiple related Error Bus incidents as one operational problem while preserving every underlying record
+- Three-pass recovery verification for bridge-managed incidents and correlation groups
+- Strict incident ownership boundaries so the legacy bridge cannot recover incidents created by newer specialist monitors
 - Quiet Ops → Error Bus escalation for persistent operational failures only
 - Automatic Error Bus recovery when Ops sees the condition clear
 - Human-readable fleet dashboard
@@ -37,12 +40,14 @@ It is intentionally separate from content intelligence and site-quality monitori
 - `GET /api/performance-anomaly`
 - `GET /api/self-test`
 - `GET /api/operational-state`
+- `GET /api/incident-correlation`
 - `GET /journey`
 - `GET /browser-search-journey`
 - `GET /deployment-integrity`
 - `GET /performance-anomaly`
 - `GET /self-test`
 - `GET /operational-state`
+- `GET /incidents`
 - `POST /api/check-now`
 - `POST /api/public-site-journey-check-now`
 - `POST /api/browser-search-journey-check-now`
@@ -50,6 +55,7 @@ It is intentionally separate from content intelligence and site-quality monitori
 - `POST /api/performance-anomaly-check-now`
 - `POST /api/self-test-check-now`
 - `POST /api/operational-state-check-now`
+- `POST /api/incident-correlation-check-now`
 - Authenticated `POST /api/heartbeat`
 - Authenticated `POST /api/deployment`
 
@@ -128,6 +134,26 @@ The dependency model is intentionally conservative. Curator Ops currently recogn
 - An unhealthy CuratorOS Self-Test can explain stale persisted Ops snapshots because the storage layer itself is under question.
 
 Other failures remain independent rather than being grouped by name or proximity. Phase 2 reports correlation but does not suppress existing Error Bus incidents; this provides a production proving period before incident deduplication changes alert behavior.
+
+## Incident Correlation and Recovery Verification
+
+The incident-correlation layer reads the dependency-aware Operational State and the active Error Bus registry together.
+
+It does not delete, merge, rewrite, or hide Error Bus incidents. Instead, it creates a lossless operational grouping:
+
+- one group represents the best evidenced root cause or independent failure
+- related downstream incidents remain attached as individual evidence records
+- the dashboard reports both grouped incident count and underlying active-incident count
+- uncorrelated incidents remain standalone groups rather than being forced into a relationship
+
+This means a public-site reachability failure plus several dependent synthetic failures can appear as one operational problem with several supporting signals, while all original Error Bus fingerprints and incident histories remain intact.
+
+Recovery now uses positive repeated evidence in two places:
+
+1. The original Ops Error Bus bridge requires three consecutive clean reconciliation passes before recovering an incident it owns.
+2. Correlated incident groups remain in a `recovering` state until absent for three consecutive correlation passes.
+
+The legacy bridge is also restricted to the incident families it actually owns: reachability, deployment drift, scheduled freshness, and Public Site Journey. Specialist incidents created by Browser Search, Deployment Integrity, Performance Anomaly, and Self-Test remain exclusively owned by those monitors.
 
 ## Secrets
 
