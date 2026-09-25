@@ -10,7 +10,7 @@ It is intentionally separate from content intelligence and site-quality monitori
 - Domain: `https://ops.oceanlinercurator.com`
 - Primary KV binding: `CURATOR_OPS_RECORDS`
 - Error Bus bridge KV binding: `CURATOR_ERROR_RECORDS`
-- Current entrypoint: `src/entry-v1.15.js`
+- Current entrypoint: `src/entry-v1.16.js`
 
 ## Current capabilities
 
@@ -31,6 +31,9 @@ It is intentionally separate from content intelligence and site-quality monitori
 - Strict incident ownership boundaries so the legacy bridge cannot recover incidents created by newer specialist monitors
 - Deployment correlation that places recent reported/runtime deployments beside incident onset without claiming causation from timing alone
 - Compact daily operational rollups for efficient 24-hour, 7-day, and 30-day stability views
+- Backward-compatible physical-device observability with optional firmware, board, display, Wi-Fi RSSI, battery, charging, power-source, and heartbeat-age metadata
+- Bounded security telemetry for honeypot/sensor events with 1-hour / 24-hour / 7-day counts and burst detection, deliberately kept separate from Error Bus incident severity
+- Current Briefing that condenses service health, deployments, scheduled work, correlated incidents, history, devices, and security into one operational readout
 - Quiet Ops → Error Bus escalation for persistent operational failures only
 - Automatic Error Bus recovery when Ops sees the condition clear
 - Human-readable fleet dashboard
@@ -44,6 +47,9 @@ It is intentionally separate from content intelligence and site-quality monitori
 - `GET /api/operational-state`
 - `GET /api/incident-correlation`
 - `GET /api/operational-history`
+- `GET /api/devices`
+- `GET /api/security-summary`
+- `GET /api/briefing`
 - `GET /journey`
 - `GET /browser-search-journey`
 - `GET /deployment-integrity`
@@ -52,6 +58,9 @@ It is intentionally separate from content intelligence and site-quality monitori
 - `GET /operational-state`
 - `GET /incidents`
 - `GET /timeline`
+- `GET /devices`
+- `GET /security`
+- `GET /briefing`
 - `POST /api/check-now`
 - `POST /api/public-site-journey-check-now`
 - `POST /api/browser-search-journey-check-now`
@@ -61,6 +70,7 @@ It is intentionally separate from content intelligence and site-quality monitori
 - `POST /api/operational-state-check-now`
 - `POST /api/incident-correlation-check-now`
 - `POST /api/operational-history-check-now`
+- authenticated `POST /api/security-event`
 - Authenticated `POST /api/heartbeat`
 - Authenticated `POST /api/deployment`
 
@@ -175,6 +185,46 @@ Curator Ops also maintains one compact daily operational bucket. Every scheduled
 - accumulated root, independent, and downstream-symptom observations
 
 Those daily buckets power efficient **24-hour, 7-day, and 30-day** summaries. Historical rollup coverage begins when this layer is deployed; older retained Error Bus incident/recovery events remain available separately and are included in window event counts where present.
+
+## Device Observability
+
+The existing authenticated `POST /api/heartbeat` contract remains compatible with older CuratorOS devices. The minimum required field is still `service`.
+
+New firmware may optionally report:
+
+- `deviceId`
+- `deviceClass`
+- `board`
+- `display`
+- `firmware`
+- `wifiRssi` / `rssi`
+- `batteryPercent` / `battery`
+- `powerSource`
+- `charging`
+- `maxAgeMinutes`
+
+When `maxAgeMinutes` is omitted, Curator Ops uses a conservative 30-minute expectation. A device is `online` inside that window, `quiet` for up to three times the expected interval, and `stale` after that. Device state is observability information only; it does not automatically create an Error Bus incident because many physical displays may be intentionally powered down.
+
+## Security Telemetry
+
+Authenticated `POST /api/security-event` accepts bounded honeypot or security-sensor observations. It supports both generic field names and common OpenCanary-style names such as `src_host`, `dst_port`, and `logtype`.
+
+Events are retained for 30 days and summarized into:
+
+- last-hour, 24-hour, and 7-day volume
+- 24-hour unique source count
+- common destination ports
+- common event categories
+- common source addresses
+- simple burst detection against the immediately preceding hour
+
+Raw probe observations remain security telemetry rather than Error Bus incidents. This prevents normal Internet scanning from polluting infrastructure incident state.
+
+## Current Briefing
+
+`/briefing` provides a concise current-state summary built entirely from existing CuratorOS evidence. It includes service reachability, deployment truth, scheduled freshness, correlated incidents, 24-hour observed health, physical-device state, and security volume.
+
+Briefing priorities can surface active operational incident groups, stale device heartbeats, and security bursts, but the briefing never raises incident severity by itself.
 
 ## Secrets
 
