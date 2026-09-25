@@ -10,7 +10,7 @@ It is intentionally separate from content intelligence and site-quality monitori
 - Domain: `https://ops.oceanlinercurator.com`
 - Primary KV binding: `CURATOR_OPS_RECORDS`
 - Error Bus bridge KV binding: `CURATOR_ERROR_RECORDS`
-- Current entrypoint: `src/entry-v1.16.js`
+- Current entrypoint: `src/entry-v1.17.js`
 
 ## Current capabilities
 
@@ -34,6 +34,7 @@ It is intentionally separate from content intelligence and site-quality monitori
 - Backward-compatible physical-device observability with optional firmware, board, display, Wi-Fi RSSI, battery, charging, power-source, and heartbeat-age metadata
 - Bounded security telemetry for honeypot/sensor events with 1-hour / 24-hour / 7-day counts and burst detection, deliberately kept separate from Error Bus incident severity
 - Current Briefing that condenses service health, deployments, scheduled work, correlated incidents, history, devices, and security into one operational readout
+- Evidence-first “Why is this red?” diagnostic engine that explains confirmed upstream causes, downstream symptoms, independent findings, supporting evidence, and recent-but-unproven deployment correlations
 - Quiet Ops → Error Bus escalation for persistent operational failures only
 - Automatic Error Bus recovery when Ops sees the condition clear
 - Human-readable fleet dashboard
@@ -50,6 +51,7 @@ It is intentionally separate from content intelligence and site-quality monitori
 - `GET /api/devices`
 - `GET /api/security-summary`
 - `GET /api/briefing`
+- `GET /api/diagnostics`
 - `GET /journey`
 - `GET /browser-search-journey`
 - `GET /deployment-integrity`
@@ -61,6 +63,7 @@ It is intentionally separate from content intelligence and site-quality monitori
 - `GET /devices`
 - `GET /security`
 - `GET /briefing`
+- `GET /diagnose`
 - `POST /api/check-now`
 - `POST /api/public-site-journey-check-now`
 - `POST /api/browser-search-journey-check-now`
@@ -71,6 +74,7 @@ It is intentionally separate from content intelligence and site-quality monitori
 - `POST /api/incident-correlation-check-now`
 - `POST /api/operational-history-check-now`
 - authenticated `POST /api/security-event`
+- `POST /api/diagnostics-check-now`
 - Authenticated `POST /api/heartbeat`
 - Authenticated `POST /api/deployment`
 
@@ -225,6 +229,26 @@ Raw probe observations remain security telemetry rather than Error Bus incidents
 `/briefing` provides a concise current-state summary built entirely from existing CuratorOS evidence. It includes service reachability, deployment truth, scheduled freshness, correlated incidents, 24-hour observed health, physical-device state, and security volume.
 
 Briefing priorities can surface active operational incident groups, stale device heartbeats, and security bursts, but the briefing never raises incident severity by itself.
+
+## Diagnostic Engine — “Why is this red?”
+
+The diagnostic engine is the explanatory layer above Operational State, Correlated Incidents, History Intelligence, Device Observability, Security Telemetry, and the Error Bus.
+
+`GET /diagnose` lists active diagnostic targets. Selecting a target, or calling `GET /api/diagnostics?target=<id>`, produces a structured diagnostic containing:
+
+- current severity and confidence
+- confirmed root or upstream cause when one is evidenced
+- downstream `causedBy` relationship when present
+- active Error Bus fingerprints supporting the condition
+- service reachability, deployment state, and scheduled-work freshness where relevant
+- recent deployment context from History Intelligence
+- device heartbeat / RSSI / battery context for device targets
+- concurrent security-burst context where relevant
+- explicit next checks that would strengthen or falsify the current explanation
+
+Evidence is intentionally labeled by strength. A dependency-backed upstream relationship can be `confirmed`; a related monitor or Error Bus record can be `supporting`; a recent deployment is always `temporal` and retains `causal: false` unless some future diagnostic layer independently establishes causation.
+
+If CuratorOS lacks enough evidence to identify a root cause, the diagnostic says so and keeps the condition independent rather than forcing a narrative.
 
 ## Secrets
 
