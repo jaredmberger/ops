@@ -7,6 +7,7 @@ const OPERATIONAL_KEY='operational-state:latest';
 const DRIFT_KEY='deployment-drift:latest';
 const SNAPSHOT_KEY='operational-history:latest';
 const DAILY_PREFIX='operational-daily:';
+const CORRELATION_HISTORY_PREFIX='incident-correlation:';
 const DEPLOYMENT_LATEST_PREFIX='deployment:latest:';
 const EVENT_PREFIX='event:';
 const DISPLAY_TIME_ZONE='America/Chicago';
@@ -60,7 +61,10 @@ async function collect(env,source){
   ]);
 
   await updateDailyBucket(env,now,correlation,operational);
-  const days=await readDailyBuckets(env,31,now);
+  const [days,recentCorrelationSnapshots]=await Promise.all([
+    readDailyBuckets(env,31,now),
+    readRecentCorrelationSnapshots(env,now,24*60)
+  ]);
   const deploymentCandidates=buildDeploymentCandidates(deployments,drift);
   const activeGroups=(correlation?.activeGroups||[]).map(group=>({
     ...group,
@@ -68,7 +72,7 @@ async function collect(env,source){
   }));
 
   const windows={
-    hours24:summarizeWindow(days,events,1,now),
+    hours24:summarizeSnapshotWindow(recentCorrelationSnapshots,events,24,now),
     days7:summarizeWindow(days,events,7,now),
     days30:summarizeWindow(days,events,30,now)
   };
@@ -82,7 +86,7 @@ async function collect(env,source){
       firstDailyBucket:days.length?days[days.length-1].date:null,
       latestDailyBucket:days.length?days[0].date:null,
       daysAvailable:days.length,
-      note:'Daily operational rollups begin when this history layer is deployed; older Error Bus event history is retained separately where available.'
+      note:'The rolling 24-hour view uses timestamped correlation snapshots. Seven- and 30-day views use compact daily rollups; older Error Bus event history is retained separately where available.'
     },
     summary:{
       currentState:correlation?.status||operational?.status||'unknown',
@@ -142,6 +146,19 @@ async function readDailyBuckets(env,count,now){
   }
   return out;
 }
+async function readRecentCorrelationSnapshots(env,now,minutes){
+  const cutoff=now.getTime()-minutes*60*1000;
+  const listed=await env[OPS_KV].list({prefix:CORRELATION_HISTORY_PREFIX,limit:1000});
+  const out=[];
+  for(const item of listed.keys){
+    const value=await env[OPS_KV].get(item.name,'json');
+    const ts=Date.parse(value?.generatedAt||'');
+    if(!value||!Number.isFinite(ts)||ts<cutoff)continue;
+    out.push(value);
+  }
+  return out.sort((a,b)=>String(a.generatedAt||'').localeCompare(String(b.generatedAt||'')));
+}
+
 
 async function readLatestDeployments(env){
   const listed=await env[OPS_KV].list({prefix:DEPLOYMENT_LATEST_PREFIX,limit:1000});
@@ -251,6 +268,34 @@ async function readOpsEvents(env){
     out.push(value);
   }
   return out.sort((a,b)=>String(b.at||'').localeCompare(String(a.at||'')));
+}
+
+function summarizeSnapshotWindow(snapshots,events,hours,now){
+  const cutoff=now.getTime()-hours*60*60*1000;
+  const selected=(snapshots||[]).filter(s=>{
+    const ts=Date.parse(s.generatedAt||'');
+    return Number.isFinite(ts)&&ts>=cutoff;
+  });
+  const selectedEvents=events.filter(e=>Date.parse(e.at||'')>=cutoff);
+  const samples=selected.length;
+  const countState=(state)=>selected.filter(s=>s.status===state).length;
+  const healthy=countState('healthy');
+  const observing=countState('observing')+countState('warming');
+  const degraded=countState('degraded');
+  const attention=countState('attention');
+
+  return{
+    label:`${hours} hours`,
+    coverageSamples:samples,
+    healthyPercent:samples?Number((healthy*100/samples).toFixed(1)):null,
+    observingPercent:samples?Number((observing*100/samples).toFixed(1)):null,
+    degradedPercent:samples?Number((degraded*100/samples).toFixed(1)):null,
+    attentionPercent:samples?Number((attention*100/samples).toFixed(1)):null,
+    maxActiveGroups:selected.reduce((n,s)=>Math.max(n,Number(s.summary?.activeGroups||0)),0),
+    maxUnderlyingIncidents:selected.reduce((n,s)=>Math.max(n,Number(s.summary?.underlyingActiveIncidents||0)),0),
+    incidentEvents:selectedEvents.filter(e=>e.kind==='ops-incident').length,
+    recoveryEvents:selectedEvents.filter(e=>e.kind==='ops-recovery').length
+  };
 }
 
 function summarizeWindow(days,events,dayCount,now){
