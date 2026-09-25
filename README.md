@@ -10,7 +10,7 @@ It is intentionally separate from content intelligence and site-quality monitori
 - Domain: `https://ops.oceanlinercurator.com`
 - Primary KV binding: `CURATOR_OPS_RECORDS`
 - Error Bus bridge KV binding: `CURATOR_ERROR_RECORDS`
-- Current entrypoint: `src/entry-v1.14.js`
+- Current entrypoint: `src/entry-v1.15.js`
 
 ## Current capabilities
 
@@ -29,6 +29,8 @@ It is intentionally separate from content intelligence and site-quality monitori
 - Correlated Incident Groups that present multiple related Error Bus incidents as one operational problem while preserving every underlying record
 - Three-pass recovery verification for bridge-managed incidents and correlation groups
 - Strict incident ownership boundaries so the legacy bridge cannot recover incidents created by newer specialist monitors
+- Deployment correlation that places recent reported/runtime deployments beside incident onset without claiming causation from timing alone
+- Compact daily operational rollups for efficient 24-hour, 7-day, and 30-day stability views
 - Quiet Ops → Error Bus escalation for persistent operational failures only
 - Automatic Error Bus recovery when Ops sees the condition clear
 - Human-readable fleet dashboard
@@ -41,6 +43,7 @@ It is intentionally separate from content intelligence and site-quality monitori
 - `GET /api/self-test`
 - `GET /api/operational-state`
 - `GET /api/incident-correlation`
+- `GET /api/operational-history`
 - `GET /journey`
 - `GET /browser-search-journey`
 - `GET /deployment-integrity`
@@ -48,6 +51,7 @@ It is intentionally separate from content intelligence and site-quality monitori
 - `GET /self-test`
 - `GET /operational-state`
 - `GET /incidents`
+- `GET /timeline`
 - `POST /api/check-now`
 - `POST /api/public-site-journey-check-now`
 - `POST /api/browser-search-journey-check-now`
@@ -56,6 +60,7 @@ It is intentionally separate from content intelligence and site-quality monitori
 - `POST /api/self-test-check-now`
 - `POST /api/operational-state-check-now`
 - `POST /api/incident-correlation-check-now`
+- `POST /api/operational-history-check-now`
 - Authenticated `POST /api/heartbeat`
 - Authenticated `POST /api/deployment`
 
@@ -154,6 +159,22 @@ Recovery now uses positive repeated evidence in two places:
 2. Correlated incident groups remain in a `recovering` state until absent for three consecutive correlation passes.
 
 The legacy bridge is also restricted to the incident families it actually owns: reachability, deployment drift, scheduled freshness, and Public Site Journey. Specialist incidents created by Browser Search, Deployment Integrity, Performance Anomaly, and Self-Test remain exclusively owned by those monitors.
+
+## Deployment Correlation and History Intelligence
+
+The history-intelligence layer adds long-horizon context without turning temporal coincidence into a causal claim.
+
+For each active correlated incident group, Curator Ops looks for a service-matched deployment observed in the preceding 60 minutes. Matching evidence can come from authenticated deployment reports or the running-version/deployment-drift inventory. A match is labeled `temporal-correlation` and explicitly carries `causal: false`; it is an investigation clue, not a verdict.
+
+Curator Ops also maintains one compact daily operational bucket. Every scheduled collection updates the bucket with:
+
+- sample counts by healthy / observing / degraded / attention state
+- maximum active correlated incident groups
+- maximum underlying active Error Bus incidents
+- maximum number of correlated duplicate signals
+- accumulated root, independent, and downstream-symptom observations
+
+Those daily buckets power efficient **24-hour, 7-day, and 30-day** summaries. Historical rollup coverage begins when this layer is deployed; older retained Error Bus incident/recovery events remain available separately and are included in window event counts where present.
 
 ## Secrets
 
