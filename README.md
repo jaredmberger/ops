@@ -10,7 +10,7 @@ It is intentionally separate from content intelligence and site-quality monitori
 - Domain: `https://ops.oceanlinercurator.com`
 - Primary KV binding: `CURATOR_OPS_RECORDS`
 - Error Bus bridge KV binding: `CURATOR_ERROR_RECORDS`
-- Current entrypoint: `src/entry-v1.11.js`
+- Current entrypoint: `src/entry-v1.13.js`
 
 ## Current capabilities
 
@@ -23,6 +23,9 @@ It is intentionally separate from content intelligence and site-quality monitori
 - Deployment Integrity monitoring for critical documents/assets, redirects, content types, response size, markers, JSON validity, and error-page substitution
 - Performance Anomaly monitoring using rolling per-path median baselines with conservative thresholds
 - CuratorOS Self-Test that verifies persistence through both the Ops KV and Error Bus KV paths
+- Dependency-aware Operational State that correlates reachability, scheduled freshness, deployment truth, synthetic monitors, browser dispatch state, and repository integrity
+- Per-monitor snapshot freshness thresholds so a technically reachable monitor cannot silently stop reporting
+- Root-cause classification that labels active findings as `root`, `independent`, or downstream `symptom` without yet suppressing the underlying evidence
 - Quiet Ops → Error Bus escalation for persistent operational failures only
 - Automatic Error Bus recovery when Ops sees the condition clear
 - Human-readable fleet dashboard
@@ -33,17 +36,20 @@ It is intentionally separate from content intelligence and site-quality monitori
 - `GET /api/deployment-integrity`
 - `GET /api/performance-anomaly`
 - `GET /api/self-test`
+- `GET /api/operational-state`
 - `GET /journey`
 - `GET /browser-search-journey`
 - `GET /deployment-integrity`
 - `GET /performance-anomaly`
 - `GET /self-test`
+- `GET /operational-state`
 - `POST /api/check-now`
 - `POST /api/public-site-journey-check-now`
 - `POST /api/browser-search-journey-check-now`
 - `POST /api/deployment-integrity-check-now`
 - `POST /api/performance-anomaly-check-now`
 - `POST /api/self-test-check-now`
+- `POST /api/operational-state-check-now`
 - Authenticated `POST /api/heartbeat`
 - Authenticated `POST /api/deployment`
 
@@ -108,6 +114,20 @@ One anomalous observation is `observing`, two consecutive anomalous observations
 The self-test monitors the monitoring storage paths themselves. Each scheduled run reads the sentinel written by the previous run, verifies that it is recent and structurally valid, and then writes the next sentinel to both `CURATOR_OPS_RECORDS` and `CURATOR_ERROR_RECORDS`.
 
 This cross-run design avoids treating normal Workers KV propagation as a failure. The first run is expected to show a warming state because there is no previous sentinel yet. As with other Ops checks, only three consecutive failures become persistent and generate an Error Bus incident; recovery is automatic once both storage paths are healthy again.
+
+## Operational State
+
+The operational-state layer is the correlation plane above the individual monitors. It reads their latest persisted snapshots and applies explicit freshness expectations to each one. A monitor whose endpoint is still reachable but whose snapshot has stopped advancing is therefore visible as stale rather than falsely healthy.
+
+It also consumes Ocean Liner Curator's public `/api/device/curatoros-integrity.json` manifest, allowing Curator Ops to include archive/sitemap/device-feed/Random-Ship reconciliation in the same operational picture.
+
+The dependency model is intentionally conservative. Curator Ops currently recognizes only relationships supported by the architecture:
+
+- Public Site reachability is upstream of Public Site Journey, Deployment Integrity, Performance Anomaly, and failed Browser Search Journey observations.
+- Browser Search Journey staleness can be downstream of a blocked or failed Browser Dispatch Supervisor.
+- An unhealthy CuratorOS Self-Test can explain stale persisted Ops snapshots because the storage layer itself is under question.
+
+Other failures remain independent rather than being grouped by name or proximity. Phase 2 reports correlation but does not suppress existing Error Bus incidents; this provides a production proving period before incident deduplication changes alert behavior.
 
 ## Secrets
 
