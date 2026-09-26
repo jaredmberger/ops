@@ -68,9 +68,12 @@ function classify(service,runtimeResult,githubResult,comparisonResult=null){
   }else if(runningCommit&&githubCommit&&Number.isFinite(headAgeMs)&&headAgeMs<DEPLOY_GRACE_MS){
     state='pending';relation='grace-window';message='GitHub is newer; deployment is within the normal grace window.';
   }else if(runningCommit&&githubCommit&&comparison){
-    if(comparison.status==='ahead'){
+    if(comparison.filesChanged===0){
+      state='in-sync';relation='content-equivalent';
+      message='Running commit differs from GitHub main, but GitHub confirms there are zero file changes between them; deployed content is equivalent.';
+    }else if(comparison.status==='ahead'){
       state='drift';relation='running-behind-main';
-      message=`Cloudflare is confirmed behind GitHub main by ${Number(comparison.aheadBy||0)} commit${Number(comparison.aheadBy||0)===1?'':'s'}.`;
+      message=`Cloudflare is confirmed behind GitHub main by ${Number(comparison.aheadBy||0)} commit${Number(comparison.aheadBy||0)===1?'':'s'} with ${Number(comparison.filesChanged||0)} changed file${Number(comparison.filesChanged||0)===1?'':'s'}.`;
     }else if(comparison.status==='behind'){
       state='drift';relation='running-ahead-of-main';
       message=`Cloudflare is running a commit ahead of GitHub main by ${Number(comparison.behindBy||0)} commit${Number(comparison.behindBy||0)===1?'':'s'}; verify the production deployment source.`;
@@ -90,7 +93,7 @@ function classify(service,runtimeResult,githubResult,comparisonResult=null){
   return{
     id:service.id,name:service.name,repository:service.repository,state,message,relation,
     running:{commit:runningCommit,version:runtime?.version||null,cloudflareVersionId:runtime?.cloudflareVersion?.id||null,cloudflareVersionTimestamp:runtime?.cloudflareVersion?.timestamp||null,buildSource:runtime?.build?.source||null,buildBranch:runtime?.build?.branch||null,buildUuid:runtime?.build?.buildUuid||null},
-    github:{commit:githubCommit,committedAt:githubCommittedAt,message:github?.message||null,authFallback:githubResult.authFallback||false,comparisonStatus:comparison?.status||null,aheadBy:comparison?.aheadBy??null,behindBy:comparison?.behindBy??null,totalCommits:comparison?.totalCommits??null},
+    github:{commit:githubCommit,committedAt:githubCommittedAt,message:github?.message||null,authFallback:githubResult.authFallback||false,comparisonStatus:comparison?.status||null,aheadBy:comparison?.aheadBy??null,behindBy:comparison?.behindBy??null,totalCommits:comparison?.totalCommits??null,filesChanged:comparison?.filesChanged??null},
     errors:{runtime:runtimeResult.ok?null:runtimeResult.error,github:githubResult.ok?(githubResult.authFallback?'Configured GitHub token was rejected; using unauthenticated fallback.':null):githubResult.error,comparison:comparisonResult&&!comparisonResult.ok?comparisonResult.error:null},
     checkedAt:new Date().toISOString()
   };
@@ -109,7 +112,8 @@ async function fetchGitHubComparison(repository,runningCommit,githubCommit,env){
     status:p.status||null,
     aheadBy:Number.isFinite(Number(p.ahead_by))?Number(p.ahead_by):null,
     behindBy:Number.isFinite(Number(p.behind_by))?Number(p.behind_by):null,
-    totalCommits:Number.isFinite(Number(p.total_commits))?Number(p.total_commits):null
+    totalCommits:Number.isFinite(Number(p.total_commits))?Number(p.total_commits):null,
+    filesChanged:Array.isArray(p.files)?p.files.length:null
   }};
 }
 async function fetchJson(url,userAgent,env,{useAccess=false,useGitHubAuth=false}={}){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),REQUEST_TIMEOUT_MS);try{const target=new URL(url);target.searchParams.set('ops',Date.now().toString());const headers={accept:'application/vnd.github+json, application/json','user-agent':userAgent};if(useAccess)Object.assign(headers,accessHeaders(env,target));if(useGitHubAuth&&target.hostname.toLowerCase()==='api.github.com'&&env.GITHUB_TOKEN){headers.authorization=`Bearer ${env.GITHUB_TOKEN}`;headers['x-github-api-version']='2022-11-28'}const response=await fetch(target.href,{method:'GET',redirect:'manual',cache:'no-store',headers,signal:controller.signal});const location=response.headers.get('location');const contentType=(response.headers.get('content-type')||'').toLowerCase();if(response.status>=300&&response.status<400){return{ok:false,status:response.status,error:`HTTP ${response.status} redirect${location?` → ${location.slice(0,220)}`:''}`}}if(!response.ok){const remaining=response.headers.get('x-ratelimit-remaining');const reset=response.headers.get('x-ratelimit-reset');return{ok:false,status:response.status,error:`HTTP ${response.status}${remaining!==null?` · rate remaining ${remaining}`:''}${reset?` · reset ${reset}`:''}`}}if(!contentType.includes('json')){const body=(await response.text()).replace(/\s+/g,' ').trim().slice(0,180);return{ok:false,status:response.status,error:`HTTP ${response.status} · ${contentType||'unknown content-type'}${body?` · body: ${body}`:''}`}}return{ok:true,status:response.status,data:await response.json()}}catch(error){return{ok:false,status:null,error:error?.name==='AbortError'?'timeout':(error?.message||String(error))}}finally{clearTimeout(timer)}}
