@@ -21,7 +21,7 @@ It is intentionally separate from content intelligence and site-quality monitori
 - Public Site Journey synthetic monitoring across homepage, shared navigation, homepage search, Pagefind runtime, standalone search, and Titanic destination
 - Browser Search Journey using scheduled Playwright/Chromium against the live homepage search
 - Deployment Integrity monitoring for critical documents/assets, redirects, content types, response size, markers, JSON validity, and error-page substitution
-- Performance Anomaly monitoring using rolling per-path median baselines with conservative thresholds
+- Performance Anomaly monitoring using rolling per path median baselines with conservative thresholds
 - CuratorOS Self-Test that verifies persistence through both the Ops KV and Error Bus KV paths
 - Dependency-aware Operational State that correlates reachability, scheduled freshness, deployment truth, synthetic monitors, browser dispatch state, and repository integrity
 - Per-monitor snapshot freshness thresholds so a technically reachable monitor cannot silently stop reporting
