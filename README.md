@@ -252,9 +252,15 @@ Evidence is intentionally labeled by strength. A dependency-backed upstream rela
 
 If CuratorOS lacks enough evidence to identify a root cause, the diagnostic says so and keeps the condition independent rather than forcing a narrative.
 
+## Disaster recovery
+
+The complete primary `CURATOR_OPS_RECORDS` namespace can be exported through authenticated `GET /api/recovery-export`. Configure the Worker secret `RECOVERY_EXPORT_TOKEN`; the route remains disabled if the secret is absent. The shared `CURATOR_ERROR_RECORDS` namespace is intentionally excluded because its authoritative recovery export is owned by the Error Bus service. See [`RECOVERY_EXPORT.md`](RECOVERY_EXPORT.md).
+
 ## Secrets
 
 Create a Cloudflare Worker secret named `OPS_WRITE_KEY` for authenticated write endpoints.
+
+Create a Cloudflare Worker secret named `RECOVERY_EXPORT_TOKEN` for authenticated full-KV recovery exports.
 
 Create a Cloudflare Worker secret named `GITHUB_OPS_TOKEN` to authenticate the Browser Search Journey GitHub API poll and avoid unauthenticated rate/abuse limits on shared Worker egress.
 
