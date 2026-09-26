@@ -61,3 +61,10 @@ if(!bridgeSource.includes("if(s.state==='drift')")){
 if(!bridgeSource.includes('comparisonStatus')){
   throw new Error('Deployment drift incidents must carry comparison evidence.');
 }
+
+if(!driftSource.includes("relation='content-equivalent'")){
+  throw new Error('Deployment drift must recognize zero-file-diff commit equivalence.');
+}
+if(!driftSource.includes('filesChanged===0')){
+  throw new Error('Deployment drift must test GitHub file-diff equivalence before escalation.');
+}

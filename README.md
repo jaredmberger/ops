@@ -16,7 +16,7 @@ It is intentionally separate from content intelligence and site-quality monitori
 
 - Cross-zone reachability checks every 5 minutes
 - Persistence-aware reachability states (`healthy` → `observing` → `degraded` → `persistent`)
-- GitHub-to-running-Worker deployment drift checks with GitHub ancestry verification before mismatches are escalated
+- GitHub-to-running-Worker deployment drift checks with GitHub ancestry and file-diff verification; merge-only SHA differences with identical deployed content remain in sync
 - Scheduled-work freshness checks
 - Public Site Journey synthetic monitoring across homepage, shared navigation, homepage search, Pagefind runtime, standalone search, and Titanic destination
 - Browser Search Journey using scheduled Playwright/Chromium against the live homepage search
