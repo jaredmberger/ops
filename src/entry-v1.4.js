@@ -54,8 +54,8 @@ async function reconcile(env,source){
       component:`deployment:${s.id}`,
       type:'ops-deployment-drift',
       severity:'p1',
-      message:`${s.name} is running a different commit than GitHub main beyond the deployment grace period.`,
-      context:{serviceId:s.id,runningCommit:s.running?.commit??null,githubCommit:s.github?.commit??null,version:s.running?.version??null,assessment:s.message??null}
+      message:s.message||`${s.name} has confirmed deployment drift from GitHub main.`,
+      context:{serviceId:s.id,runningCommit:s.running?.commit??null,githubCommit:s.github?.commit??null,version:s.running?.version??null,relation:s.relation??null,comparisonStatus:s.github?.comparisonStatus??null,aheadBy:s.github?.aheadBy??null,behindBy:s.github?.behindBy??null,assessment:s.message??null}
     });
   }
   for(const s of freshness?.services||[]){

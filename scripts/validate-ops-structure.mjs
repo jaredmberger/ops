@@ -44,3 +44,20 @@ const chain=[...visited].map(file=>path.relative(root,file)).sort();
 console.log(`Validated production entrypoint: ${mainPath}`);
 console.log(`Validated ${chain.length} files in the active import chain.`);
 for(const file of chain)console.log(` - ${file}`);
+
+
+const driftSource=fs.readFileSync(path.join(root,'src/entry-v1.2.js'),'utf8');
+if(!driftSource.includes('/compare/')){
+  throw new Error('Deployment drift must verify GitHub commit ancestry before declaring drift.');
+}
+if(!driftSource.includes("state='unknown';relation='unverified'")){
+  throw new Error('Unverified commit mismatches must remain unknown rather than escalate as drift.');
+}
+
+const bridgeSource=fs.readFileSync(path.join(root,'src/entry-v1.4.js'),'utf8');
+if(!bridgeSource.includes("if(s.state==='drift')")){
+  throw new Error('Error Bus bridge must only escalate confirmed deployment drift.');
+}
+if(!bridgeSource.includes('comparisonStatus')){
+  throw new Error('Deployment drift incidents must carry comparison evidence.');
+}

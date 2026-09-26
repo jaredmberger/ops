@@ -36,13 +36,82 @@ export default {
 
 async function collectDeploymentDrift(env, source) {
   requireKv(env); const services=[];
-  for(const service of RUNTIMES){const runtime=await fetchJson(service.runtimeUrl,'CuratorOps-Drift/1.8',env,{useAccess:true});const github=await fetchGitHubHead(service.repository,env);services.push(classify(service,runtime,github));}
+  for(const service of RUNTIMES){
+    const runtime=await fetchJson(service.runtimeUrl,'CuratorOps-Drift/1.9',env,{useAccess:true});
+    const github=await fetchGitHubHead(service.repository,env);
+    let comparison=null;
+    const runningCommit=runtime.ok?runtime.data?.build?.commit:null;
+    const githubCommit=github.ok?github.data?.sha:null;
+    const githubCommittedAt=github.ok?github.data?.committedAt:null;
+    const headAgeMs=githubCommittedAt?Date.now()-Date.parse(githubCommittedAt):null;
+    if(runningCommit&&githubCommit&&runningCommit!==githubCommit&&!(Number.isFinite(headAgeMs)&&headAgeMs<DEPLOY_GRACE_MS)){
+      comparison=await fetchGitHubComparison(service.repository,runningCommit,githubCommit,env);
+    }
+    services.push(classify(service,runtime,github,comparison));
+  }
   const counts={inSync:services.filter(x=>x.state==='in-sync').length,pending:services.filter(x=>x.state==='pending').length,drift:services.filter(x=>x.state==='drift').length,unknown:services.filter(x=>x.state==='unknown').length};
   const snapshot={generatedAt:new Date().toISOString(),source,displayTimeZone:DISPLAY_TIME_ZONE,graceMinutes:Math.round(DEPLOY_GRACE_MS/60000),accessServiceAuthConfigured:Boolean(env.CF_ACCESS_CLIENT_ID&&env.CF_ACCESS_CLIENT_SECRET),githubAuthConfigured:Boolean(env.GITHUB_TOKEN),summary:{total:services.length,...counts,status:counts.drift||counts.unknown?'attention':counts.pending?'deploying':'healthy'},services};
   await env[KV].put(DRIFT_SNAPSHOT_KEY,JSON.stringify(snapshot)); const ts=Date.parse(snapshot.generatedAt)||Date.now(); await env[KV].put(`${DRIFT_HISTORY_PREFIX}${String(9999999999999-ts).padStart(13,'0')}:${crypto.randomUUID()}`,JSON.stringify(snapshot),{expirationTtl:60*60*24*180}); return snapshot;
 }
-function classify(service,runtimeResult,githubResult){const runtime=runtimeResult.ok?runtimeResult.data:null,github=githubResult.ok?githubResult.data:null,runningCommit=runtime?.build?.commit||null,githubCommit=github?.sha||null,githubCommittedAt=github?.committedAt||null,headAgeMs=githubCommittedAt?Date.now()-Date.parse(githubCommittedAt):null;let state='unknown',message='Deployment state could not be determined.';if(runningCommit&&githubCommit&&runningCommit===githubCommit){state='in-sync';message='Running Worker matches GitHub main.'}else if(runningCommit&&githubCommit&&Number.isFinite(headAgeMs)&&headAgeMs<DEPLOY_GRACE_MS){state='pending';message='GitHub is newer; deployment is within the normal grace window.'}else if(runningCommit&&githubCommit){state='drift';message='Running Worker does not match GitHub main beyond the deployment grace window.'}return{id:service.id,name:service.name,repository:service.repository,state,message,running:{commit:runningCommit,version:runtime?.version||null,cloudflareVersionId:runtime?.cloudflareVersion?.id||null,cloudflareVersionTimestamp:runtime?.cloudflareVersion?.timestamp||null,buildSource:runtime?.build?.source||null,buildBranch:runtime?.build?.branch||null,buildUuid:runtime?.build?.buildUuid||null},github:{commit:githubCommit,committedAt:githubCommittedAt,message:github?.message||null,authFallback:githubResult.authFallback||false},errors:{runtime:runtimeResult.ok?null:runtimeResult.error,github:githubResult.ok?(githubResult.authFallback?'Configured GitHub token was rejected; using unauthenticated fallback.':null):githubResult.error},checkedAt:new Date().toISOString()}}
+function classify(service,runtimeResult,githubResult,comparisonResult=null){
+  const runtime=runtimeResult.ok?runtimeResult.data:null;
+  const github=githubResult.ok?githubResult.data:null;
+  const runningCommit=runtime?.build?.commit||null;
+  const githubCommit=github?.sha||null;
+  const githubCommittedAt=github?.committedAt||null;
+  const headAgeMs=githubCommittedAt?Date.now()-Date.parse(githubCommittedAt):null;
+  const comparison=comparisonResult?.ok?comparisonResult.data:null;
+  let state='unknown',message='Deployment state could not be determined.',relation='unverified';
+
+  if(runningCommit&&githubCommit&&runningCommit===githubCommit){
+    state='in-sync';relation='identical';message='Running Worker matches GitHub main.';
+  }else if(runningCommit&&githubCommit&&Number.isFinite(headAgeMs)&&headAgeMs<DEPLOY_GRACE_MS){
+    state='pending';relation='grace-window';message='GitHub is newer; deployment is within the normal grace window.';
+  }else if(runningCommit&&githubCommit&&comparison){
+    if(comparison.status==='ahead'){
+      state='drift';relation='running-behind-main';
+      message=`Cloudflare is confirmed behind GitHub main by ${Number(comparison.aheadBy||0)} commit${Number(comparison.aheadBy||0)===1?'':'s'}.`;
+    }else if(comparison.status==='behind'){
+      state='drift';relation='running-ahead-of-main';
+      message=`Cloudflare is running a commit ahead of GitHub main by ${Number(comparison.behindBy||0)} commit${Number(comparison.behindBy||0)===1?'':'s'}; verify the production deployment source.`;
+    }else if(comparison.status==='diverged'){
+      state='drift';relation='diverged';
+      message='Cloudflare and GitHub main are on divergent commit histories; verify the production deployment source.';
+    }else if(comparison.status==='identical'){
+      state='in-sync';relation='identical';message='GitHub confirms the running commit and main are identical.';
+    }else{
+      state='unknown';relation='unverified';message='Commit mismatch observed, but GitHub did not return a recognized ancestry relationship.';
+    }
+  }else if(runningCommit&&githubCommit){
+    state='unknown';relation='unverified';
+    message='Commit mismatch observed, but GitHub could not verify the relationship; not escalating as confirmed drift.';
+  }
+
+  return{
+    id:service.id,name:service.name,repository:service.repository,state,message,relation,
+    running:{commit:runningCommit,version:runtime?.version||null,cloudflareVersionId:runtime?.cloudflareVersion?.id||null,cloudflareVersionTimestamp:runtime?.cloudflareVersion?.timestamp||null,buildSource:runtime?.build?.source||null,buildBranch:runtime?.build?.branch||null,buildUuid:runtime?.build?.buildUuid||null},
+    github:{commit:githubCommit,committedAt:githubCommittedAt,message:github?.message||null,authFallback:githubResult.authFallback||false,comparisonStatus:comparison?.status||null,aheadBy:comparison?.aheadBy??null,behindBy:comparison?.behindBy??null,totalCommits:comparison?.totalCommits??null},
+    errors:{runtime:runtimeResult.ok?null:runtimeResult.error,github:githubResult.ok?(githubResult.authFallback?'Configured GitHub token was rejected; using unauthenticated fallback.':null):githubResult.error,comparison:comparisonResult&&!comparisonResult.ok?comparisonResult.error:null},
+    checkedAt:new Date().toISOString()
+  };
+}
 async function fetchGitHubHead(repository,env){const url=`https://api.github.com/repos/${repository}/commits/main`;let result=await fetchJson(url,'CuratorOps/1.8',env,{useGitHubAuth:true});if(!result.ok&&result.status===401&&env.GITHUB_TOKEN){const fallback=await fetchJson(url,'CuratorOps/1.8',env,{useGitHubAuth:false});if(fallback.ok)result={...fallback,authFallback:true};}if(!result.ok)return result;const p=result.data;return{ok:true,authFallback:Boolean(result.authFallback),data:{sha:p?.sha||null,committedAt:p?.commit?.committer?.date||p?.commit?.author?.date||null,message:String(p?.commit?.message||'').split('\n')[0].slice(0,300)}}}
+async function fetchGitHubComparison(repository,runningCommit,githubCommit,env){
+  const url=`https://api.github.com/repos/${repository}/compare/${encodeURIComponent(runningCommit)}...${encodeURIComponent(githubCommit)}`;
+  let result=await fetchJson(url,'CuratorOps-Drift/1.9',env,{useGitHubAuth:true});
+  if(!result.ok&&result.status===401&&env.GITHUB_TOKEN){
+    const fallback=await fetchJson(url,'CuratorOps-Drift/1.9',env,{useGitHubAuth:false});
+    if(fallback.ok)result={...fallback,authFallback:true};
+  }
+  if(!result.ok)return result;
+  const p=result.data||{};
+  return{ok:true,authFallback:Boolean(result.authFallback),data:{
+    status:p.status||null,
+    aheadBy:Number.isFinite(Number(p.ahead_by))?Number(p.ahead_by):null,
+    behindBy:Number.isFinite(Number(p.behind_by))?Number(p.behind_by):null,
+    totalCommits:Number.isFinite(Number(p.total_commits))?Number(p.total_commits):null
+  }};
+}
 async function fetchJson(url,userAgent,env,{useAccess=false,useGitHubAuth=false}={}){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),REQUEST_TIMEOUT_MS);try{const target=new URL(url);target.searchParams.set('ops',Date.now().toString());const headers={accept:'application/vnd.github+json, application/json','user-agent':userAgent};if(useAccess)Object.assign(headers,accessHeaders(env,target));if(useGitHubAuth&&target.hostname.toLowerCase()==='api.github.com'&&env.GITHUB_TOKEN){headers.authorization=`Bearer ${env.GITHUB_TOKEN}`;headers['x-github-api-version']='2022-11-28'}const response=await fetch(target.href,{method:'GET',redirect:'manual',cache:'no-store',headers,signal:controller.signal});const location=response.headers.get('location');const contentType=(response.headers.get('content-type')||'').toLowerCase();if(response.status>=300&&response.status<400){return{ok:false,status:response.status,error:`HTTP ${response.status} redirect${location?` → ${location.slice(0,220)}`:''}`}}if(!response.ok){const remaining=response.headers.get('x-ratelimit-remaining');const reset=response.headers.get('x-ratelimit-reset');return{ok:false,status:response.status,error:`HTTP ${response.status}${remaining!==null?` · rate remaining ${remaining}`:''}${reset?` · reset ${reset}`:''}`}}if(!contentType.includes('json')){const body=(await response.text()).replace(/\s+/g,' ').trim().slice(0,180);return{ok:false,status:response.status,error:`HTTP ${response.status} · ${contentType||'unknown content-type'}${body?` · body: ${body}`:''}`}}return{ok:true,status:response.status,data:await response.json()}}catch(error){return{ok:false,status:null,error:error?.name==='AbortError'?'timeout':(error?.message||String(error))}}finally{clearTimeout(timer)}}
 function accessHeaders(env,target){if(!env.CF_ACCESS_CLIENT_ID||!env.CF_ACCESS_CLIENT_SECRET)return{};const host=target.hostname.toLowerCase();const owned=host==='oceanliners.net'||host.endsWith('.oceanliners.net')||host==='oceanlinercurator.com'||host.endsWith('.oceanlinercurator.com');return owned?{'CF-Access-Client-Id':env.CF_ACCESS_CLIENT_ID,'CF-Access-Client-Secret':env.CF_ACCESS_CLIENT_SECRET}:{}}
 async function readDriftSnapshot(env){requireKv(env);return await env[KV].get(DRIFT_SNAPSHOT_KEY,'json')||{generatedAt:null,source:null,displayTimeZone:DISPLAY_TIME_ZONE,graceMinutes:15,githubAuthConfigured:Boolean(env.GITHUB_TOKEN),summary:{total:RUNTIMES.length,inSync:0,pending:0,drift:0,unknown:RUNTIMES.length,status:'unknown'},services:RUNTIMES.map(x=>({id:x.id,name:x.name,repository:x.repository,state:'unknown'}))}}
