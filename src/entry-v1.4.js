@@ -55,7 +55,7 @@ async function reconcile(env,source){
       type:'ops-deployment-drift',
       severity:'p1',
       message:s.message||`${s.name} has confirmed deployment drift from GitHub main.`,
-      context:{serviceId:s.id,runningCommit:s.running?.commit??null,githubCommit:s.github?.commit??null,version:s.running?.version??null,relation:s.relation??null,comparisonStatus:s.github?.comparisonStatus??null,aheadBy:s.github?.aheadBy??null,behindBy:s.github?.behindBy??null,assessment:s.message??null}
+      context:{serviceId:s.id,runningCommit:s.running?.commit??null,githubCommit:s.github?.commit??null,version:s.running?.version??null,relation:s.relation??null,comparisonStatus:s.github?.comparisonStatus??null,aheadBy:s.github?.aheadBy??null,behindBy:s.github?.behindBy??null,filesChanged:s.github?.filesChanged??null,assessment:s.message??null}
     });
   }
   for(const s of freshness?.services||[]){
