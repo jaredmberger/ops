@@ -68,3 +68,18 @@ if(!driftSource.includes("relation='content-equivalent'")){
 if(!driftSource.includes('filesChanged===0')){
   throw new Error('Deployment drift must test GitHub file-diff equivalence before escalation.');
 }
+
+
+const runtimeSource=fs.readFileSync(path.join(root,'src/entry-v1.1.js'),'utf8');
+if(!runtimeSource.includes("import { BUILD_META } from './build-meta.generated.js'")){
+  throw new Error('Ops runtime must expose build metadata.');
+}
+if(!runtimeSource.includes("id:'ops'")||!runtimeSource.includes('localRuntimeIdentity')){
+  throw new Error('Ops runtime inventory must include Curator Ops itself without recursive HTTP fetch.');
+}
+if(!driftSource.includes("id:'ops'")||!driftSource.includes('localRuntimeResult')){
+  throw new Error('Deployment drift must include Curator Ops itself using local runtime metadata.');
+}
+if(!wrangler.includes('command = "node scripts/write-build-meta.mjs"')){
+  throw new Error('wrangler.toml must stamp Ops build metadata before deployment.');
+}
