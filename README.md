@@ -284,6 +284,8 @@ The smoke gate:
 
 The base homepage also exposes stable `CURATOR_OPS_NAV` and `CURATOR_OPS_CARDS` extension anchors. The final entry layer normalizes homepage navigation against those anchors so newer features no longer depend on replacing links introduced by earlier wrappers.
 
+See [`DEPLOYMENT_CONTRACT.md`](DEPLOYMENT_CONTRACT.md) for the fleet-wide production-branch, runtime-identity, and drift-classification contract.
+
 ## Deployment note
 
 Cloudflare Git builds must deploy the current repository HEAD with `npx wrangler deploy --config wrangler.toml`. Ops now stamps its own deployed Git commit and includes itself in Deployment Drift, so stale Ops production code is visible rather than silently undermining the monitor. If a dashboard endpoint reflects an older entrypoint, verify the Worker production branch is `main` and that the production deploy command is `npx wrangler deploy --config wrangler.toml`.
