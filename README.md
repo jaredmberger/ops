@@ -17,6 +17,7 @@ It is intentionally separate from content intelligence and site-quality monitori
 - Cross-zone reachability checks every 5 minutes
 - Persistence-aware reachability states (`healthy` → `observing` → `degraded` → `persistent`)
 - GitHub-to-running-Worker deployment drift checks with GitHub ancestry and file-diff verification; merge-only SHA differences with identical deployed content remain in sync
+- Self-deployment truth: Ops stamps its own deployed Git commit and evaluates itself alongside the rest of the monitored fleet
 - Scheduled-work freshness checks
 - Public Site Journey synthetic monitoring across homepage, shared navigation, homepage search, Pagefind runtime, standalone search, and Titanic destination
 - Browser Search Journey using scheduled Playwright/Chromium against the live homepage search
@@ -285,4 +286,4 @@ The base homepage also exposes stable `CURATOR_OPS_NAV` and `CURATOR_OPS_CARDS` 
 
 ## Deployment note
 
-Cloudflare Git builds must deploy the current repository HEAD with `npx wrangler deploy --config wrangler.toml`. If a dashboard endpoint reflects an older entrypoint, trigger a fresh Git commit rather than using a stale source-snapshot redeploy.
+Cloudflare Git builds must deploy the current repository HEAD with `npx wrangler deploy --config wrangler.toml`. Ops now stamps its own deployed Git commit and includes itself in Deployment Drift, so stale Ops production code is visible rather than silently undermining the monitor. If a dashboard endpoint reflects an older entrypoint, verify the Worker production branch is `main` and that the production deploy command is `npx wrangler deploy --config wrangler.toml`.
