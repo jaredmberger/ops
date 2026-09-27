@@ -286,6 +286,8 @@ The stable production entrypoint is `src/ops.js`. The historical `entry-v1.x.js`
 
 The base homepage also exposes stable `CURATOR_OPS_NAV` and `CURATOR_OPS_CARDS` extension anchors. The final compatibility layer normalizes homepage navigation against those anchors while named modules are extracted incrementally.
 
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the stable-entrypoint and named-module migration plan.
+
 See [`DEPLOYMENT_CONTRACT.md`](DEPLOYMENT_CONTRACT.md) for the fleet-wide production-branch, runtime-identity, and drift-classification contract.
 
 ## Deployment note
