@@ -1,4 +1,4 @@
-import base from './entry-v1.4.js';
+import base from './error-bus-bridge.js';
 
 const OPS_KV='CURATOR_OPS_RECORDS';
 const ERROR_KV='CURATOR_ERROR_RECORDS';
