@@ -10,7 +10,7 @@ It is intentionally separate from content intelligence and site-quality monitori
 - Domain: `https://ops.oceanlinercurator.com`
 - Primary KV binding: `CURATOR_OPS_RECORDS`
 - Error Bus bridge KV binding: `CURATOR_ERROR_RECORDS`
-- Current entrypoint: `src/entry-v1.18.js`
+- Current entrypoint: `src/entry-v1.19.js`
 
 ## Current capabilities
 
@@ -34,7 +34,7 @@ It is intentionally separate from content intelligence and site-quality monitori
 - Backward-compatible physical-device observability with optional firmware, board, display, Wi-Fi RSSI, battery, charging, power-source, and heartbeat-age metadata
 - Bounded security telemetry for honeypot/sensor events with 1-hour / 24-hour / 7-day counts and burst detection, deliberately kept separate from Error Bus incident severity
 - Current Briefing that condenses service health, deployments, scheduled work, correlated incidents, history, devices, and security into one operational readout
-- Evidence-first “Why is this red?” diagnostic engine that explains confirmed upstream causes, downstream symptoms, independent findings, supporting evidence, and recent-but-unproven deployment correlations
+- Evidence-first “Why is this red?” diagnostic engine that explains confirmed upstream causes, downstream symptoms, independent findings, supporting evidence, and recent-but-unproven deployment correlations\n- Inline fleet diagnostics on the main Ops dashboard: unhealthy service rows show a concise evidence-based explanation and link directly to the full diagnostic target
 - Stable homepage extension anchors plus a normalized navigation surface for every major operational view
 - Pull-request smoke validation for JavaScript syntax, active import-chain integrity, wrangler entrypoint existence, and README/production-entrypoint agreement
 - Quiet Ops → Error Bus escalation for persistent operational failures only
