@@ -46,7 +46,7 @@ console.log(`Validated ${chain.length} files in the active import chain.`);
 for(const file of chain)console.log(` - ${file}`);
 
 
-const driftSource=fs.readFileSync(path.join(root,'src/entry-v1.2.js'),'utf8');
+const driftSource=fs.readFileSync(path.join(root,'src/deployment-drift.js'),'utf8');
 if(!driftSource.includes('/compare/')){
   throw new Error('Deployment drift must verify GitHub commit ancestry before declaring drift.');
 }
@@ -54,7 +54,7 @@ if(!driftSource.includes("state='unknown';relation='unverified'")){
   throw new Error('Unverified commit mismatches must remain unknown rather than escalate as drift.');
 }
 
-const bridgeSource=fs.readFileSync(path.join(root,'src/entry-v1.4.js'),'utf8');
+const bridgeSource=fs.readFileSync(path.join(root,'src/error-bus-bridge.js'),'utf8');
 if(!bridgeSource.includes("if(s.state==='drift')")){
   throw new Error('Error Bus bridge must only escalate confirmed deployment drift.');
 }
@@ -70,7 +70,7 @@ if(!driftSource.includes('filesChanged===0')){
 }
 
 
-const runtimeSource=fs.readFileSync(path.join(root,'src/entry-v1.1.js'),'utf8');
+const runtimeSource=fs.readFileSync(path.join(root,'src/runtime-identity.js'),'utf8');
 if(!runtimeSource.includes("import { BUILD_META } from './build-meta.generated.js'")){
   throw new Error('Ops runtime must expose build metadata.');
 }
@@ -100,4 +100,28 @@ for(const name of srcFiles){
   if(match&&Number(match[1])>19){
     throw new Error(`Version-wrapper pattern is frozen; unexpected wrapper found: ${name}`);
   }
+}
+
+
+const freshnessSource=fs.readFileSync(path.join(root,'src/scheduled-freshness.js'),'utf8');
+if(!freshnessSource.includes('/api/scheduled-freshness')||!freshnessSource.includes("scheduled-freshness:latest")){
+  throw new Error('Named scheduled-freshness module must own freshness routes and snapshot key.');
+}
+
+const foundationalShims=[
+  ['entry-v1.1.js','runtime-identity.js'],
+  ['entry-v1.2.js','deployment-drift.js'],
+  ['entry-v1.3.js','scheduled-freshness.js'],
+  ['entry-v1.4.js','error-bus-bridge.js']
+];
+for(const [name,target] of foundationalShims){
+  const source=fs.readFileSync(path.join(root,'src',name),'utf8');
+  if(!source.includes(`export { default } from './${target}';`)||source.split('\n').length>=6){
+    throw new Error(`${name} must remain a tiny compatibility shim to ${target}.`);
+  }
+}
+
+const historySource=fs.readFileSync(path.join(root,'src/entry-v1.5.js'),'utf8');
+if(!historySource.includes("import base from './error-bus-bridge.js'")){
+  throw new Error('v1.5 must import the named Error Bus bridge directly.');
 }

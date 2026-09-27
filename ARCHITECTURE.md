@@ -19,10 +19,11 @@ New work should either:
 
 ## Current compatibility map
 
-- `entry-v1.1.js` — runtime identity and runtime inventory
-- `entry-v1.2.js` — deployment drift
-- `entry-v1.3.js` — scheduled-work freshness
-- `entry-v1.4.js` — Ops → Error Bus reconciliation bridge
+- `src/runtime-identity.js` — runtime identity and runtime inventory
+- `src/deployment-drift.js` — deployment drift
+- `src/scheduled-freshness.js` — scheduled-work freshness
+- `src/error-bus-bridge.js` — Ops → Error Bus reconciliation bridge
+- `entry-v1.1.js` through `entry-v1.4.js` — compatibility shims only
 - `entry-v1.5.js` — operational history / intelligence
 - `entry-v1.6.js` — Public Site Journey
 - `entry-v1.7.js` — CuratorOS persistence self-test
@@ -45,7 +46,7 @@ The chain should be migrated incrementally rather than rewritten.
 
 Preferred extraction order:
 
-1. foundational control-plane modules:
+1. foundational control-plane modules — extracted:
    - runtime identity
    - deployment drift
    - scheduled freshness
@@ -90,3 +91,15 @@ CI validates that:
 - the active relative-import graph resolves completely
 
 This keeps the stable boundary fixed while allowing the internal implementation to improve safely.
+
+
+## Named foundational control plane
+
+The first four operational layers now live in named modules:
+
+- `runtime-identity.js`
+- `deployment-drift.js`
+- `scheduled-freshness.js`
+- `error-bus-bridge.js`
+
+The historical v1.1-v1.4 files are compatibility shims only, and `entry-v1.5.js` imports the named bridge directly. This removes the foundational control plane from the numbered-wrapper traversal without changing routes, KV keys, schedules, or incident semantics.

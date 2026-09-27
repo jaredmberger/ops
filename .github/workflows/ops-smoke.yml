@@ -19,3 +19,5 @@ jobs:
           find src scripts -type f \( -name '*.js' -o -name '*.mjs' \) -print0 | xargs -0 -n1 node --check
       - name: Validate active entry chain
         run: node scripts/validate-ops-structure.mjs
+      - name: Test foundational control-plane modules
+        run: node --test tests/foundational-control-plane.test.mjs
