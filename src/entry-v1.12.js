@@ -1,4 +1,4 @@
-import base from './entry-v1.11.js';
+import base from './performance-anomaly.js';
 
 const OPS_KV='CURATOR_OPS_RECORDS';
 const BROWSER_KEY='browser-search-journey:latest';
