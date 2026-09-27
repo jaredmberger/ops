@@ -83,3 +83,21 @@ if(!driftSource.includes("id:'ops'")||!driftSource.includes('localRuntimeResult'
 if(!wrangler.includes('command = "node scripts/write-build-meta.mjs"')){
   throw new Error('wrangler.toml must stamp Ops build metadata before deployment.');
 }
+
+
+if(mainPath!=='src/ops.js'){
+  throw new Error(`Curator Ops production entrypoint must remain src/ops.js, found: ${mainPath}`);
+}
+
+const stableOpsSource=fs.readFileSync(path.join(root,'src/ops.js'),'utf8');
+if(!stableOpsSource.includes("entry-v1.19.js")){
+  throw new Error('Stable Ops entrypoint must currently delegate to the verified v1.19 compatibility implementation.');
+}
+
+const srcFiles=fs.readdirSync(path.join(root,'src'));
+for(const name of srcFiles){
+  const match=name.match(/^entry-v1\.(\d+)\.js$/);
+  if(match&&Number(match[1])>19){
+    throw new Error(`Version-wrapper pattern is frozen; unexpected wrapper found: ${name}`);
+  }
+}
