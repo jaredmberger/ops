@@ -10,7 +10,7 @@ It is intentionally separate from content intelligence and site-quality monitori
 - Domain: `https://ops.oceanlinercurator.com`
 - Primary KV binding: `CURATOR_OPS_RECORDS`
 - Error Bus bridge KV binding: `CURATOR_ERROR_RECORDS`
-- Current entrypoint: `src/entry-v1.19.js`
+- Current entrypoint: `src/ops.js`
 
 ## Current capabilities
 
@@ -282,7 +282,11 @@ The smoke gate:
 3. walks the active relative-import chain and verifies every imported source exists
 4. verifies that the README's documented production entrypoint exactly matches `wrangler.toml`
 
-The base homepage also exposes stable `CURATOR_OPS_NAV` and `CURATOR_OPS_CARDS` extension anchors. The final entry layer normalizes homepage navigation against those anchors so newer features no longer depend on replacing links introduced by earlier wrappers.
+The stable production entrypoint is `src/ops.js`. The historical `entry-v1.x.js` chain remains temporarily beneath it as a compatibility implementation, but the numbered-wrapper pattern is frozen: new capabilities should be extracted into named modules instead of adding `entry-v1.20.js` or later wrappers.
+
+The base homepage also exposes stable `CURATOR_OPS_NAV` and `CURATOR_OPS_CARDS` extension anchors. The final compatibility layer normalizes homepage navigation against those anchors while named modules are extracted incrementally.
+
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the stable-entrypoint and named-module migration plan.
 
 See [`DEPLOYMENT_CONTRACT.md`](DEPLOYMENT_CONTRACT.md) for the fleet-wide production-branch, runtime-identity, and drift-classification contract.
 
