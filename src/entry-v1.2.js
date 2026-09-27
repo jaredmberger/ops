@@ -1,4 +1,5 @@
 import base from './entry-v1.1.js';
+import { BUILD_META } from './build-meta.generated.js';
 
 const KV = 'CURATOR_OPS_RECORDS';
 const DRIFT_SNAPSHOT_KEY = 'deployment-drift:latest';
@@ -8,6 +9,7 @@ const DEPLOY_GRACE_MS = 15 * 60 * 1000;
 const DISPLAY_TIME_ZONE = 'America/Chicago';
 
 const RUNTIMES = [
+  { id:'ops', name:'Curator Ops', local:true, repository:'jaredmberger/ops' },
   { id:'error-bus', name:'Error Bus', runtimeUrl:'https://errors.oceanliners.net/api/runtime', repository:'jaredmberger/errors' },
   { id:'verify', name:'Curator Verify', runtimeUrl:'https://verify.oceanlinercurator.com/api/runtime', repository:'jaredmberger/verify' },
   { id:'site-health', name:'Site Health', runtimeUrl:'https://site-health.oceanliners.net/api/runtime', repository:'jaredmberger/site-health' },
@@ -37,7 +39,7 @@ export default {
 async function collectDeploymentDrift(env, source) {
   requireKv(env); const services=[];
   for(const service of RUNTIMES){
-    const runtime=await fetchJson(service.runtimeUrl,'CuratorOps-Drift/1.9',env,{useAccess:true});
+    const runtime=service.local?localRuntimeResult(env):await fetchJson(service.runtimeUrl,'CuratorOps-Drift/1.9',env,{useAccess:true});
     const github=await fetchGitHubHead(service.repository,env);
     let comparison=null;
     const runningCommit=runtime.ok?runtime.data?.build?.commit:null;
@@ -98,6 +100,7 @@ function classify(service,runtimeResult,githubResult,comparisonResult=null){
     checkedAt:new Date().toISOString()
   };
 }
+function localRuntimeResult(env){const meta=env.CF_VERSION_METADATA||{};return{ok:true,status:200,data:{ok:true,service:'Curator Ops',version:'1.1.5',repository:'jaredmberger/ops',runtime:'cloudflare-workers',cloudflareVersion:{id:meta.id||null,tag:meta.tag||null,timestamp:meta.timestamp||null},build:BUILD_META,observedAt:new Date().toISOString()}}}
 async function fetchGitHubHead(repository,env){const url=`https://api.github.com/repos/${repository}/commits/main`;let result=await fetchJson(url,'CuratorOps/1.8',env,{useGitHubAuth:true});if(!result.ok&&result.status===401&&env.GITHUB_TOKEN){const fallback=await fetchJson(url,'CuratorOps/1.8',env,{useGitHubAuth:false});if(fallback.ok)result={...fallback,authFallback:true};}if(!result.ok)return result;const p=result.data;return{ok:true,authFallback:Boolean(result.authFallback),data:{sha:p?.sha||null,committedAt:p?.commit?.committer?.date||p?.commit?.author?.date||null,message:String(p?.commit?.message||'').split('\n')[0].slice(0,300)}}}
 async function fetchGitHubComparison(repository,runningCommit,githubCommit,env){
   const url=`https://api.github.com/repos/${repository}/compare/${encodeURIComponent(runningCommit)}...${encodeURIComponent(githubCommit)}`;
