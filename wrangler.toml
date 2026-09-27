@@ -4,6 +4,9 @@ compatibility_date = "2026-08-12"
 compatibility_flags = ["global_fetch_strictly_public"]
 workers_dev = true
 
+[build]
+command = "node scripts/write-build-meta.mjs"
+
 [[kv_namespaces]]
 binding = "CURATOR_OPS_RECORDS"
 id = "747c318b62fa479aa486130011d5670d"
