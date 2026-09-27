@@ -125,3 +125,39 @@ const historySource=fs.readFileSync(path.join(root,'src/entry-v1.5.js'),'utf8');
 if(!historySource.includes("import base from './error-bus-bridge.js'")){
   throw new Error('v1.5 must import the named Error Bus bridge directly.');
 }
+
+
+const monitorModules=[
+  ['public-site-journey.js','/api/public-site-journey'],
+  ['self-test.js','/api/self-test'],
+  ['monitoring-summary.js','Public Site Journey'],
+  ['browser-search-journey.js','/api/browser-search-journey'],
+  ['deployment-integrity.js','/api/deployment-integrity'],
+  ['performance-anomaly.js','/api/performance-anomaly']
+];
+for(const [name,marker] of monitorModules){
+  const source=fs.readFileSync(path.join(root,'src',name),'utf8');
+  if(!source.includes(marker)){
+    throw new Error(`Named monitor module ${name} is missing expected ownership marker: ${marker}`);
+  }
+}
+
+const monitorShims=[
+  ['entry-v1.6.js','public-site-journey.js'],
+  ['entry-v1.7.js','self-test.js'],
+  ['entry-v1.8.js','monitoring-summary.js'],
+  ['entry-v1.9.js','browser-search-journey.js'],
+  ['entry-v1.10.js','deployment-integrity.js'],
+  ['entry-v1.11.js','performance-anomaly.js']
+];
+for(const [name,target] of monitorShims){
+  const source=fs.readFileSync(path.join(root,'src',name),'utf8');
+  if(!source.includes(`export { default } from './${target}';`)||source.split('\n').length>=6){
+    throw new Error(`${name} must remain a tiny compatibility shim to ${target}.`);
+  }
+}
+
+const supervisorSource=fs.readFileSync(path.join(root,'src/entry-v1.12.js'),'utf8');
+if(!supervisorSource.includes("import base from './performance-anomaly.js'")){
+  throw new Error('v1.12 must import the named Performance Anomaly module directly.');
+}
