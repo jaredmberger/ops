@@ -48,8 +48,12 @@ test('v1.1-v1.4 are compatibility shims', async () => {
   }
 });
 
-test('v1.5 imports Error Bus bridge directly', async () => {
-  const source=await readFile(new URL('../src/entry-v1.5.js',import.meta.url),'utf8');
+test('incident history imports Error Bus bridge directly and v1.5 remains a shim', async () => {
+  const source=await readFile(new URL('../src/incident-history.js',import.meta.url),'utf8');
   assert.match(source,/import base from '\.\/error-bus-bridge\.js'/);
   assert.doesNotMatch(source,/entry-v1\.4\.js/);
+
+  const shim=await readFile(new URL('../src/entry-v1.5.js',import.meta.url),'utf8');
+  assert.match(shim,/export \{ default \} from '\.\/incident-history\.js'/);
+  assert.ok(shim.split('\n').length<6);
 });
