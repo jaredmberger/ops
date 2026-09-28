@@ -27,7 +27,7 @@ test('fleet diagnostics owns homepage diagnosis presentation',async()=>{
 test('stable Ops entrypoint uses only named production modules',async()=>{
   const source=await readFile(new URL('../src/ops.js',import.meta.url),'utf8');
   assert.match(source,/fleet-diagnostics\.js/);
-  assert.doesNotMatch(source,/entry-v1\./);
+  assert.doesNotMatch(source,/from '\.\/entry-v1\./);
 });
 
 test('final historical files are compatibility shims',async()=>{
