@@ -25,12 +25,13 @@ New work should either:
 - `src/error-bus-bridge.js` — Ops → Error Bus reconciliation bridge
 - `entry-v1.1.js` through `entry-v1.4.js` — compatibility shims only
 - `entry-v1.5.js` — operational history / intelligence
-- `entry-v1.6.js` — Public Site Journey
-- `entry-v1.7.js` — CuratorOS persistence self-test
-- `entry-v1.8.js` — homepage monitoring summary injection
-- `entry-v1.9.js` — Browser Search Journey
-- `entry-v1.10.js` — Deployment Integrity
-- `entry-v1.11.js` — Performance Anomaly
+- `src/public-site-journey.js` — Public Site Journey
+- `src/self-test.js` — CuratorOS persistence self-test
+- `src/monitoring-summary.js` — homepage monitoring summary injection
+- `src/browser-search-journey.js` — Browser Search Journey
+- `src/deployment-integrity.js` — Deployment Integrity
+- `src/performance-anomaly.js` — Performance Anomaly
+- `entry-v1.6.js` through `entry-v1.11.js` — compatibility shims only
 - `entry-v1.12.js` — Browser Search dispatch supervisor
 - `entry-v1.13.js` — dependency-aware Operational State
 - `entry-v1.14.js` — incident correlation and recovery lifecycle
@@ -51,9 +52,10 @@ Preferred extraction order:
    - deployment drift
    - scheduled freshness
    - Error Bus bridge
-2. independent active monitors:
+2. independent active monitors — extracted:
    - Public Site Journey
    - self-test
+   - homepage monitoring summary adapter
    - Browser Search
    - Deployment Integrity
    - Performance Anomaly
@@ -103,3 +105,19 @@ The first four operational layers now live in named modules:
 - `error-bus-bridge.js`
 
 The historical v1.1-v1.4 files are compatibility shims only, and `entry-v1.5.js` imports the named bridge directly. This removes the foundational control plane from the numbered-wrapper traversal without changing routes, KV keys, schedules, or incident semantics.
+
+
+## Named independent monitors
+
+The primary independent monitor stack now lives in named modules:
+
+- `public-site-journey.js`
+- `self-test.js`
+- `monitoring-summary.js`
+- `browser-search-journey.js`
+- `deployment-integrity.js`
+- `performance-anomaly.js`
+
+The historical v1.6-v1.11 files are compatibility shims only. `entry-v1.12.js` now imports `performance-anomaly.js` directly, so those six numbered layers are no longer part of live traversal.
+
+This extraction preserves each monitor's persistence thresholds, KV key families, scheduled behavior, and specialist incident ownership.
