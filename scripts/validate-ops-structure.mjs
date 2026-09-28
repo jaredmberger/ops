@@ -161,3 +161,39 @@ const supervisorSource=fs.readFileSync(path.join(root,'src/entry-v1.12.js'),'utf
 if(!supervisorSource.includes("import base from './performance-anomaly.js'")){
   throw new Error('v1.12 must import the named Performance Anomaly module directly.');
 }
+
+
+const intelligenceModules=[
+  ['browser-search-dispatch.js','/api/browser-search-dispatch-supervisor'],
+  ['operational-state.js','/api/operational-state'],
+  ['incident-correlation.js','/api/incident-correlation'],
+  ['operational-history.js','/api/operational-history'],
+  ['device-security-briefing.js','/api/briefing'],
+  ['diagnostics.js','/api/diagnostics']
+];
+for(const [name,marker] of intelligenceModules){
+  const source=fs.readFileSync(path.join(root,'src',name),'utf8');
+  if(!source.includes(marker)){
+    throw new Error(`Named Ops intelligence module ${name} is missing expected ownership marker: ${marker}`);
+  }
+}
+
+const intelligenceShims=[
+  ['entry-v1.12.js','browser-search-dispatch.js'],
+  ['entry-v1.13.js','operational-state.js'],
+  ['entry-v1.14.js','incident-correlation.js'],
+  ['entry-v1.15.js','operational-history.js'],
+  ['entry-v1.16.js','device-security-briefing.js'],
+  ['entry-v1.17.js','diagnostics.js']
+];
+for(const [name,target] of intelligenceShims){
+  const source=fs.readFileSync(path.join(root,'src',name),'utf8');
+  if(!source.includes(`export { default } from './${target}';`)||source.split('\n').length>=6){
+    throw new Error(`${name} must remain a tiny compatibility shim to ${target}.`);
+  }
+}
+
+const recoveryLayer=fs.readFileSync(path.join(root,'src/entry-v1.18.js'),'utf8');
+if(!recoveryLayer.includes("import base from './diagnostics.js'")){
+  throw new Error('v1.18 must import the named diagnostics module directly.');
+}
