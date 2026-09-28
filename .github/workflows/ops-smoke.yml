@@ -20,4 +20,4 @@ jobs:
       - name: Validate active entry chain
         run: node scripts/validate-ops-structure.mjs
       - name: Test named Ops modules
-        run: node --test tests/foundational-control-plane.test.mjs tests/independent-monitors.test.mjs
+        run: node --test tests/foundational-control-plane.test.mjs tests/independent-monitors.test.mjs tests/correlation-intelligence.test.mjs
