@@ -51,7 +51,7 @@ test('Performance Anomaly retains conservative thresholds',async()=>{
   assert.match(source,/import base from '\.\/deployment-integrity\.js'/);
 });
 
-test('v1.6-v1.11 are compatibility shims and v1.12 skips them',async()=>{
+test('v1.6-v1.11 are compatibility shims and dispatch supervision follows the named monitor chain',async()=>{
   const mapping=[
     ['entry-v1.6.js','public-site-journey.js'],
     ['entry-v1.7.js','self-test.js'],
@@ -65,7 +65,7 @@ test('v1.6-v1.11 are compatibility shims and v1.12 skips them',async()=>{
     assert.match(source,new RegExp(`export \\{ default \\} from '\\.\\/${target.replace('.', '\\.')}';`));
     assert.ok(source.split('\n').length<6);
   }
-  const next=await readFile(new URL('../src/entry-v1.12.js',import.meta.url),'utf8');
-  assert.match(next,/import base from '\.\/performance-anomaly\.js'/);
-  assert.doesNotMatch(next,/entry-v1\.11\.js/);
+  const dispatch=await readFile(new URL('../src/browser-search-dispatch.js',import.meta.url),'utf8');
+  assert.match(dispatch,/import base from '\.\/performance-anomaly\.js'/);
+  assert.doesNotMatch(dispatch,/entry-v1\.11\.js/);
 });
