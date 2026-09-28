@@ -126,9 +126,17 @@ for(const [name,target] of foundationalShims){
   }
 }
 
-const historySource=fs.readFileSync(path.join(root,'src/entry-v1.5.js'),'utf8');
+const historySource=fs.readFileSync(path.join(root,'src/incident-history.js'),'utf8');
 if(!historySource.includes("import base from './error-bus-bridge.js'")){
-  throw new Error('v1.5 must import the named Error Bus bridge directly.');
+  throw new Error('Named incident history must import the Error Bus bridge directly.');
+}
+const v15Shim=fs.readFileSync(path.join(root,'src/entry-v1.5.js'),'utf8');
+if(!v15Shim.includes("export { default } from './incident-history.js';")||v15Shim.split('\n').length>=6){
+  throw new Error('entry-v1.5.js must remain a tiny compatibility shim to incident-history.js.');
+}
+const journeySource=fs.readFileSync(path.join(root,'src/public-site-journey.js'),'utf8');
+if(!journeySource.includes("import base from './incident-history.js'")){
+  throw new Error('Public Site Journey must import named incident history directly.');
 }
 
 
