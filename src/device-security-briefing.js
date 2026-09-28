@@ -23,7 +23,7 @@ export default{
   async fetch(request,env,ctx){
     const u=new URL(request.url);
 
-    if(request.method==='POST'&&u.pathname==='/api/heartbeat'){
+    if(request.method==='POST'&&['/api/heartbeat','/api/device/v1/heartbeat'].includes(u.pathname)){
       const auth=authorizeWrite(request,env);
       if(!auth.ok)return json({ok:false,error:auth.error},auth.status);
       try{
