@@ -313,7 +313,7 @@ function buildFindings(byId,repositoryIntegrity){
     add({
       id:`scheduled:${service.id}`,
       name:`${service.name} scheduled work`,
-      severity:'attention',
+      severity:service.status==='stale'?'attention':'degraded',
       role:'independent',
       message:service.status==='stale'
         ?`${service.name} scheduled work is stale (${service.ageMinutes??'unknown'} minutes old; limit ${service.maxAgeMinutes??'unknown'}).`
