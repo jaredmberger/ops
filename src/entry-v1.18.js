@@ -1,4 +1,4 @@
-import base from './entry-v1.17.js';
+import base from './diagnostics.js';
 
 const NAV_START='<!-- CURATOR_OPS_NAV -->';
 const CARDS_START='<!-- CURATOR_OPS_CARDS -->';

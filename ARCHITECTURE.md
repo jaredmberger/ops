@@ -32,12 +32,13 @@ New work should either:
 - `src/deployment-integrity.js` — Deployment Integrity
 - `src/performance-anomaly.js` — Performance Anomaly
 - `entry-v1.6.js` through `entry-v1.11.js` — compatibility shims only
-- `entry-v1.12.js` — Browser Search dispatch supervisor
-- `entry-v1.13.js` — dependency-aware Operational State
-- `entry-v1.14.js` — incident correlation and recovery lifecycle
-- `entry-v1.15.js` — operational history intelligence and deployment correlation
-- `entry-v1.16.js` — device observability, security telemetry, and briefing
-- `entry-v1.17.js` — diagnostic engine
+- `src/browser-search-dispatch.js` — Browser Search dispatch supervisor
+- `src/operational-state.js` — dependency-aware Operational State
+- `src/incident-correlation.js` — incident correlation and recovery lifecycle
+- `src/operational-history.js` — operational history intelligence and deployment correlation
+- `src/device-security-briefing.js` — device observability, security telemetry, and briefing
+- `src/diagnostics.js` — diagnostic engine
+- `entry-v1.12.js` through `entry-v1.17.js` — compatibility shims only
 - `entry-v1.18.js` — recovery export and homepage/navigation normalization
 - `entry-v1.19.js` — inline fleet diagnostics presentation
 
@@ -59,10 +60,12 @@ Preferred extraction order:
    - Browser Search
    - Deployment Integrity
    - Performance Anomaly
-3. correlation/intelligence layers:
+3. correlation/intelligence layers — extracted:
+   - Browser Search dispatch supervision
    - Operational State
    - incident correlation
    - history intelligence
+   - devices/security/briefing support
    - diagnostics
 4. presentation/support:
    - device/security/briefing
@@ -121,3 +124,19 @@ The primary independent monitor stack now lives in named modules:
 The historical v1.6-v1.11 files are compatibility shims only. `entry-v1.12.js` now imports `performance-anomaly.js` directly, so those six numbered layers are no longer part of live traversal.
 
 This extraction preserves each monitor's persistence thresholds, KV key families, scheduled behavior, and specialist incident ownership.
+
+
+## Named correlation and intelligence layers
+
+The correlation/intelligence path now lives in named modules:
+
+- `browser-search-dispatch.js`
+- `operational-state.js`
+- `incident-correlation.js`
+- `operational-history.js`
+- `device-security-briefing.js`
+- `diagnostics.js`
+
+The historical v1.12-v1.17 files are compatibility shims only. `entry-v1.18.js` imports `diagnostics.js` directly, removing the entire correlation/intelligence sequence from numbered-wrapper traversal.
+
+The extraction preserves dependency-aware state classification, lossless incident grouping, repeated recovery confirmation, temporal-not-causal deployment correlation, observational device/security semantics, and evidence-labeled diagnostics.
