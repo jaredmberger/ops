@@ -69,3 +69,10 @@ test('v1.12-v1.17 remain compatibility shims', async () => {
     assert.ok(source.split('\n').length<6);
   }
 });
+
+
+test('Operational State distinguishes stale scheduled work from observer unreachability', async () => {
+  const source=await readFile(new URL('../src/operational-state.js',import.meta.url),'utf8');
+  assert.match(source,/severity:service\.status==='stale'\?'attention':'degraded'/);
+  assert.match(source,/job staleness is not yet confirmed/);
+});
