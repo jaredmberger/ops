@@ -293,3 +293,20 @@ See [`DEPLOYMENT_CONTRACT.md`](DEPLOYMENT_CONTRACT.md) for the fleet-wide produc
 ## Deployment note
 
 Cloudflare Git builds must deploy the current repository HEAD with `npx wrangler deploy --config wrangler.toml`. Ops now stamps its own deployed Git commit and includes itself in Deployment Drift, so stale Ops production code is visible rather than silently undermining the monitor. If a dashboard endpoint reflects an older entrypoint, verify the Worker production branch is `main` and that the production deploy command is `npx wrangler deploy --config wrangler.toml`.
+
+
+## Physical-device API
+
+Ops is the canonical heartbeat authority for CuratorOS physical devices.
+
+Preferred endpoint:
+
+`POST /api/device/v1/heartbeat`
+
+Compatibility alias:
+
+`POST /api/heartbeat`
+
+Both routes use the same authenticated heartbeat handler and require the `x-curator-ops-key` header. The versioned route is the stable contract for new ESP32, CYD, Pi, and other hardware integrations. Existing unversioned clients remain supported.
+
+The canonical read facade for general-purpose hardware is provided by CuratorOS at `https://curator.oceanliners.net/api/device/v1/status`. Specialist Error Bus hardware endpoints remain separate and should only be used by devices whose purpose is specifically incident display or Error Bus operations.

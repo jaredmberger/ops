@@ -76,3 +76,13 @@ test('Operational State distinguishes stale scheduled work from observer unreach
   assert.match(source,/severity:service\.status==='stale'\?'attention':'degraded'/);
   assert.match(source,/job staleness is not yet confirmed/);
 });
+
+
+test('Device API exposes stable versioned heartbeat route', async () => {
+  const source=await readFile(new URL('../src/device-security-briefing.js',import.meta.url),'utf8');
+  assert.match(source,/\/api\/device\/v1\/heartbeat/);
+  assert.match(source,/\/api\/heartbeat/);
+  assert.match(source,/x-curator-ops-key/);
+  assert.match(source,/deviceId/);
+  assert.match(source,/maxAgeMinutes/);
+});
