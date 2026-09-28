@@ -90,8 +90,13 @@ if(mainPath!=='src/ops.js'){
 }
 
 const stableOpsSource=fs.readFileSync(path.join(root,'src/ops.js'),'utf8');
-if(!stableOpsSource.includes("entry-v1.19.js")){
-  throw new Error('Stable Ops entrypoint must currently delegate to the verified v1.19 compatibility implementation.');
+if(!stableOpsSource.includes("fleet-diagnostics.js")){
+  throw new Error('Stable Ops entrypoint must delegate directly to the named fleet diagnostics module.');
+}
+for(const file of chain){
+  if(file.startsWith('src/entry-v1.')){
+    throw new Error('Production import graph must not traverse numbered compatibility shims: '+file);
+  }
 }
 
 const srcFiles=fs.readdirSync(path.join(root,'src'));
@@ -121,9 +126,17 @@ for(const [name,target] of foundationalShims){
   }
 }
 
-const historySource=fs.readFileSync(path.join(root,'src/entry-v1.5.js'),'utf8');
+const historySource=fs.readFileSync(path.join(root,'src/incident-history.js'),'utf8');
 if(!historySource.includes("import base from './error-bus-bridge.js'")){
-  throw new Error('v1.5 must import the named Error Bus bridge directly.');
+  throw new Error('Named incident history must import the Error Bus bridge directly.');
+}
+const v15Shim=fs.readFileSync(path.join(root,'src/entry-v1.5.js'),'utf8');
+if(!v15Shim.includes("export { default } from './incident-history.js';")||v15Shim.split('\n').length>=6){
+  throw new Error('entry-v1.5.js must remain a tiny compatibility shim to incident-history.js.');
+}
+const journeySource=fs.readFileSync(path.join(root,'src/public-site-journey.js'),'utf8');
+if(!journeySource.includes("import base from './incident-history.js'")){
+  throw new Error('Public Site Journey must import named incident history directly.');
 }
 
 
@@ -193,7 +206,18 @@ for(const [name,target] of intelligenceShims){
   }
 }
 
-const recoveryLayer=fs.readFileSync(path.join(root,'src/entry-v1.18.js'),'utf8');
-if(!recoveryLayer.includes("import base from './diagnostics.js'")){
-  throw new Error('v1.18 must import the named diagnostics module directly.');
+const recoveryLayer=fs.readFileSync(path.join(root,'src/recovery-home.js'),'utf8');
+if(!recoveryLayer.includes("import base from './diagnostics.js'")||!recoveryLayer.includes('/api/recovery-export')){
+  throw new Error('Named recovery/home module must own recovery export and import diagnostics directly.');
+}
+const fleetLayer=fs.readFileSync(path.join(root,'src/fleet-diagnostics.js'),'utf8');
+if(!fleetLayer.includes("import base from './recovery-home.js'")||!fleetLayer.includes('DIAGNOSTICS_KEY')){
+  throw new Error('Named fleet diagnostics module must sit directly above recovery/home.');
+}
+const finalShims=[['entry-v1.18.js','recovery-home.js'],['entry-v1.19.js','fleet-diagnostics.js']];
+for(const [name,target] of finalShims){
+  const source=fs.readFileSync(path.join(root,'src',name),'utf8');
+  if(!source.includes(`export { default } from './${target}';`)||source.split('\n').length>=6){
+    throw new Error(`${name} must remain a tiny compatibility shim to ${target}.`);
+  }
 }

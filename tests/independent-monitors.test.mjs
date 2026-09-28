@@ -7,7 +7,7 @@ test('Public Site Journey preserves three-stage persistence',async()=>{
   assert.match(source,/\/api\/public-site-journey/);
   assert.match(source,/failureStreak===1\?'observing':failureStreak===2\?'degraded':'persistent'/);
   assert.match(source,/public-site-journey:latest/);
-  assert.match(source,/import base from '\.\/entry-v1\.5\.js'/);
+  assert.match(source,/import base from '\.\/incident-history\.js'/);
 });
 
 test('self-test owns persistence verification and storage incident',async()=>{

@@ -8,7 +8,7 @@ Cloudflare must deploy:
 
 `src/ops.js`
 
-The stable entrypoint currently delegates to the historical compatibility chain ending at `entry-v1.19.js`.
+The stable entrypoint now delegates directly to the named `fleet-diagnostics.js` module. No numbered `entry-v1.x.js` file is part of the production import graph.
 
 The numbered `entry-v1.x.js` pattern is frozen. Do not add `entry-v1.20.js` or later wrappers for new production capabilities.
 
@@ -24,7 +24,8 @@ New work should either:
 - `src/scheduled-freshness.js` — scheduled-work freshness
 - `src/error-bus-bridge.js` — Ops → Error Bus reconciliation bridge
 - `entry-v1.1.js` through `entry-v1.4.js` — compatibility shims only
-- `entry-v1.5.js` — operational history / intelligence
+- `src/incident-history.js` — incident history and `/api/curator-intelligence`
+- `entry-v1.5.js` — compatibility shim only
 - `src/public-site-journey.js` — Public Site Journey
 - `src/self-test.js` — CuratorOS persistence self-test
 - `src/monitoring-summary.js` — homepage monitoring summary injection
@@ -39,8 +40,9 @@ New work should either:
 - `src/device-security-briefing.js` — device observability, security telemetry, and briefing
 - `src/diagnostics.js` — diagnostic engine
 - `entry-v1.12.js` through `entry-v1.17.js` — compatibility shims only
-- `entry-v1.18.js` — recovery export and homepage/navigation normalization
-- `entry-v1.19.js` — inline fleet diagnostics presentation
+- `src/recovery-home.js` — recovery export and homepage/navigation normalization
+- `src/fleet-diagnostics.js` — inline fleet diagnostics presentation
+- `entry-v1.18.js` and `entry-v1.19.js` — compatibility shims only
 
 ## Extraction strategy
 
@@ -67,8 +69,9 @@ Preferred extraction order:
    - history intelligence
    - devices/security/briefing support
    - diagnostics
-4. presentation/support:
+4. presentation/support — extracted:
    - device/security/briefing
+   - incident history/intelligence
    - recovery export
    - homepage/fleet presentation
 
@@ -140,3 +143,10 @@ The correlation/intelligence path now lives in named modules:
 The historical v1.12-v1.17 files are compatibility shims only. `entry-v1.18.js` imports `diagnostics.js` directly, removing the entire correlation/intelligence sequence from numbered-wrapper traversal.
 
 The extraction preserves dependency-aware state classification, lossless incident grouping, repeated recovery confirmation, temporal-not-causal deployment correlation, observational device/security semantics, and evidence-labeled diagnostics.
+
+
+## Completed named-module migration
+
+The production import graph is now fully named from `src/ops.js` downward.
+
+Historical `entry-v1.x.js` files remain only as compatibility shims for repository history and any external references. CI fails if any numbered compatibility shim re-enters the production import graph.

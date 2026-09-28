@@ -1,4 +1,4 @@
-import base from './entry-v1.5.js';
+import base from './incident-history.js';
 
 const OPS_KV='CURATOR_OPS_RECORDS';
 const JOURNEY_KEY='public-site-journey:latest';

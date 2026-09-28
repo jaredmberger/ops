@@ -3,14 +3,14 @@ name: Recovery checks
 on:
   pull_request:
     paths:
-      - 'src/entry-v1.18.js'
+      - 'src/recovery-home.js'
       - 'scripts/validate-recovery-backup.mjs'
       - 'tests/recovery-export-safety.test.mjs'
       - '.github/workflows/recovery.yml'
   push:
     branches: [main]
     paths:
-      - 'src/entry-v1.18.js'
+      - 'src/recovery-home.js'
       - 'scripts/validate-recovery-backup.mjs'
       - 'tests/recovery-export-safety.test.mjs'
       - '.github/workflows/recovery.yml'
@@ -27,5 +27,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --check src/entry-v1.18.js
+      - run: node --check src/recovery-home.js
       - run: node --test tests/recovery-export-safety.test.mjs
