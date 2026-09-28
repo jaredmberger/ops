@@ -157,9 +157,9 @@ for(const [name,target] of monitorShims){
   }
 }
 
-const supervisorSource=fs.readFileSync(path.join(root,'src/entry-v1.12.js'),'utf8');
+const supervisorSource=fs.readFileSync(path.join(root,'src/browser-search-dispatch.js'),'utf8');
 if(!supervisorSource.includes("import base from './performance-anomaly.js'")){
-  throw new Error('v1.12 must import the named Performance Anomaly module directly.');
+  throw new Error('Browser Search dispatch supervisor must import the named Performance Anomaly module directly.');
 }
 
 
