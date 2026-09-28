@@ -3,7 +3,7 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 
 test('Ops recovery endpoint is protected and scoped to CURATOR_OPS_RECORDS',async()=>{
-  const source=await readFile(new URL('../src/entry-v1.18.js',import.meta.url),'utf8');
+  const source=await readFile(new URL('../src/recovery-home.js',import.meta.url),'utf8');
   assert.match(source,/\/api\/recovery-export/);
   assert.match(source,/RECOVERY_EXPORT_TOKEN/);
   assert.match(source,/x-curator-recovery-key/);
