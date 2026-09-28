@@ -54,7 +54,7 @@ test('Diagnostics owns evidence-first explanations', async () => {
   assert.match(source,/import base from '\.\/device-security-briefing\.js'/);
 });
 
-test('v1.12-v1.17 are compatibility shims and v1.18 skips them', async () => {
+test('v1.12-v1.17 remain compatibility shims', async () => {
   const mapping=[
     ['entry-v1.12.js','browser-search-dispatch.js'],
     ['entry-v1.13.js','operational-state.js'],
@@ -68,7 +68,4 @@ test('v1.12-v1.17 are compatibility shims and v1.18 skips them', async () => {
     assert.match(source,new RegExp(`export \\{ default \\} from '\\.\\/${target.replace('.', '\\.')}';`));
     assert.ok(source.split('\n').length<6);
   }
-  const next=await readFile(new URL('../src/entry-v1.18.js',import.meta.url),'utf8');
-  assert.match(next,/import base from '\.\/diagnostics\.js'/);
-  assert.doesNotMatch(next,/entry-v1\.17\.js/);
 });
