@@ -282,7 +282,7 @@ The smoke gate:
 3. walks the active relative-import chain and verifies every imported source exists
 4. verifies that the README's documented production entrypoint exactly matches `wrangler.toml`
 
-The stable production entrypoint is `src/ops.js`. Runtime identity, deployment drift, scheduled freshness, the Ops → Error Bus bridge, Public Site Journey, self-test, Browser Search Journey, Deployment Integrity, Performance Anomaly, and the homepage monitoring-summary adapter now live in named modules. Historical v1.1-v1.4 and v1.6-v1.11 files are compatibility shims; the remaining numbered chain is being migrated incrementally, and the wrapper pattern remains frozen.
+The stable production entrypoint is `src/ops.js`. The foundational control plane, primary independent monitors, Browser Search dispatch supervision, Operational State, incident correlation, operational history, device/security/briefing support, and diagnostics now live in named modules. Historical v1.1-v1.4 and v1.6-v1.17 files are compatibility shims; only the final recovery/presentation layers remain in the numbered chain, and the wrapper pattern remains frozen.
 
 The base homepage also exposes stable `CURATOR_OPS_NAV` and `CURATOR_OPS_CARDS` extension anchors. The final compatibility layer normalizes homepage navigation against those anchors while named modules are extracted incrementally.
 
