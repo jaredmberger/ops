@@ -317,7 +317,7 @@ function buildFindings(byId,repositoryIntegrity){
       role:'independent',
       message:service.status==='stale'
         ?`${service.name} scheduled work is stale (${service.ageMinutes??'unknown'} minutes old; limit ${service.maxAgeMinutes??'unknown'}).`
-        :`${service.name} scheduled freshness endpoint is unreachable.`,
+        :`${service.name} scheduled freshness observer is unreachable; job staleness is not yet confirmed.`,
       evidence:{serviceId:service.id,status:service.status,lastSuccessAt:service.lastSuccessAt??null,ageMinutes:service.ageMinutes??null,error:service.error??null}
     });
   }
