@@ -90,8 +90,13 @@ if(mainPath!=='src/ops.js'){
 }
 
 const stableOpsSource=fs.readFileSync(path.join(root,'src/ops.js'),'utf8');
-if(!stableOpsSource.includes("entry-v1.19.js")){
-  throw new Error('Stable Ops entrypoint must currently delegate to the verified v1.19 compatibility implementation.');
+if(!stableOpsSource.includes("fleet-diagnostics.js")){
+  throw new Error('Stable Ops entrypoint must delegate directly to the named fleet diagnostics module.');
+}
+for(const file of chain){
+  if(file.startsWith('src/entry-v1.')){
+    throw new Error('Production import graph must not traverse numbered compatibility shims: '+file);
+  }
 }
 
 const srcFiles=fs.readdirSync(path.join(root,'src'));
