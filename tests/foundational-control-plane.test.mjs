@@ -24,6 +24,8 @@ test('deployment drift owns evidence-based deployment comparison', async () => {
   assert.match(source,/filesChanged===0/);
   assert.match(source,/relation='content-equivalent'/);
   assert.match(source,/\/compare\//);
+  assert.match(source,/runtime\.data\?\.commit\|\|runtime\.data\?\.build\?\.commit/);
+  assert.match(source,/runtime\?\.cloudflareDeploymentId\|\|runtime\?\.cloudflareVersion\?\.id/);
   assert.match(source,/import base from '\.\/runtime-identity\.js'/);
 });
 
