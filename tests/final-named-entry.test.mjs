@@ -42,3 +42,16 @@ test('final historical files are compatibility shims',async()=>{
     assert.ok(source.split('\n').length<6);
   }
 });
+
+
+test('runtime identity accepts Pages while preserving Worker deployment identity requirements',async()=>{
+  const source=await readFile(new URL('../src/runtime-identity.js',import.meta.url),'utf8');
+  assert.match(source,/id:'curator-os'/);
+  assert.match(source,/https:\/\/curator\.oceanliners\.net\/api\/runtime/);
+  assert.match(source,/id:'link-map'/);
+  assert.match(source,/https:\/\/link-map\.oceanliners\.net\/api\/runtime/);
+  assert.match(source,/\['cloudflare-workers','cloudflare-pages'\]/);
+  assert.match(source,/cloudflareDeploymentId is required for cloudflare-workers/);
+  assert.match(source,/cloudflareDeploymentId must be null for cloudflare-pages/);
+  assert.match(source,/services\.filter\(x=>x\.ok\)\.length/);
+});
