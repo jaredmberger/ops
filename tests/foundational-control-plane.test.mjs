@@ -8,6 +8,14 @@ test('runtime identity owns runtime inventory and self identity', async () => {
   assert.match(source,/\/api\/runtime-status/);
   assert.match(source,/localRuntimeIdentity/);
   assert.match(source,/BUILD_META/);
+  assert.match(source,/contractVersion:1/);
+  assert.match(source,/productionBranch:'main'/);
+  assert.match(source,/cloudflareDeploymentId/);
+  assert.match(source,/validateRuntimeContract/);
+  assert.match(source,/contractVersion must be 1/);
+  assert.match(source,/productionBranch must be main/);
+  assert.match(source,/commit is required/);
+  assert.match(source,/cloudflareDeploymentId is required/);
 });
 
 test('deployment drift owns evidence-based deployment comparison', async () => {
@@ -16,6 +24,8 @@ test('deployment drift owns evidence-based deployment comparison', async () => {
   assert.match(source,/filesChanged===0/);
   assert.match(source,/relation='content-equivalent'/);
   assert.match(source,/\/compare\//);
+  assert.match(source,/runtime\.data\?\.commit\|\|runtime\.data\?\.build\?\.commit/);
+  assert.match(source,/runtime\?\.cloudflareDeploymentId\|\|runtime\?\.cloudflareVersion\?\.id/);
   assert.match(source,/import base from '\.\/runtime-identity\.js'/);
 });
 
