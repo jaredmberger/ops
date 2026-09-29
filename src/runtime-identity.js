@@ -8,6 +8,7 @@ const REQUEST_TIMEOUT_MS = 10000;
 
 const RUNTIMES = [
   { id:'ops', name:'Curator Ops', local:true, repository:'jaredmberger/ops' },
+  { id:'curator-os', name:'CuratorOS', url:'https://curator.oceanliners.net/api/runtime', repository:'jaredmberger/curator-os' },
   { id:'error-bus', name:'Error Bus', url:'https://errors.oceanliners.net/api/runtime', repository:'jaredmberger/errors' },
   { id:'verify', name:'Curator Verify', url:'https://verify.oceanlinercurator.com/api/runtime', repository:'jaredmberger/verify' },
   { id:'site-health', name:'Site Health', url:'https://site-health.oceanliners.net/api/runtime', repository:'jaredmberger/site-health' },
@@ -16,7 +17,8 @@ const RUNTIMES = [
   { id:'indexer', name:'Curator Indexer', url:'https://curator-indexer.oceanliners.net/api/runtime', repository:'jaredmberger/curator-indexer' },
   { id:'search-intelligence', name:'Search Intelligence', url:'https://search-intelligence.oceanliners.net/api/runtime', repository:'jaredmberger/search-intelligence' },
   { id:'analytics', name:'Curator Analytics', url:'https://analytics.oceanliners.net/api/runtime', repository:'jaredmberger/analytics' },
-  { id:'content-opportunity', name:'Content Opportunity', url:'https://content.oceanliners.net/api/runtime', repository:'jaredmberger/content-opportunity' }
+  { id:'content-opportunity', name:'Content Opportunity', url:'https://content.oceanliners.net/api/runtime', repository:'jaredmberger/content-opportunity' },
+  { id:'link-map', name:'Link Map', url:'https://link-map.oceanliners.net/api/runtime', repository:'jaredmberger/link-map' }
 ];
 
 export default {
@@ -39,7 +41,7 @@ export default {
 
 async function collectRuntimeIdentities(env, source) {
   requireKv(env); const services=[]; for(const runtime of RUNTIMES) services.push(runtime.local?localRuntimeIdentity(env,runtime):await probeRuntime(runtime,env));
-  const identified=services.filter(x=>x.ok&&x.cloudflareVersion?.id).length;
+  const identified=services.filter(x=>x.ok).length;
   const snapshot={generatedAt:new Date().toISOString(),source,accessServiceAuthConfigured:Boolean(env.CF_ACCESS_CLIENT_ID&&env.CF_ACCESS_CLIENT_SECRET),summary:{total:services.length,identified,missing:services.length-identified,status:identified===services.length?'healthy':'attention'},services};
   await env[KV].put(RUNTIME_SNAPSHOT_KEY,JSON.stringify(snapshot)); const ts=Date.parse(snapshot.generatedAt)||Date.now(); await env[KV].put(`${RUNTIME_HISTORY_PREFIX}${String(9999999999999-ts).padStart(13,'0')}:${crypto.randomUUID()}`,JSON.stringify(snapshot),{expirationTtl:60*60*24*90}); return snapshot;
 }
@@ -53,8 +55,9 @@ function validateRuntimeContract(p,service){
   if(typeof p.service!=='string'||!p.service)return{ok:false,error:'service is required'};
   if(typeof p.version!=='string'||!p.version)return{ok:false,error:'version is required'};
   if(typeof p.commit!=='string'||!p.commit)return{ok:false,error:'commit is required'};
-  if(typeof p.cloudflareDeploymentId!=='string'||!p.cloudflareDeploymentId)return{ok:false,error:'cloudflareDeploymentId is required'};
-  if(p.runtime!=='cloudflare-workers')return{ok:false,error:'runtime must be cloudflare-workers'};
+  if(!['cloudflare-workers','cloudflare-pages'].includes(p.runtime))return{ok:false,error:'runtime must be cloudflare-workers or cloudflare-pages'};
+  if(p.runtime==='cloudflare-workers'&&(typeof p.cloudflareDeploymentId!=='string'||!p.cloudflareDeploymentId))return{ok:false,error:'cloudflareDeploymentId is required for cloudflare-workers'};
+  if(p.runtime==='cloudflare-pages'&&p.cloudflareDeploymentId!==null)return{ok:false,error:'cloudflareDeploymentId must be null for cloudflare-pages'};
   if(typeof p.observedAt!=='string'||!p.observedAt)return{ok:false,error:'observedAt is required'};
   return{ok:true};
 }
