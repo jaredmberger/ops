@@ -42,7 +42,7 @@ async function collectDeploymentDrift(env, source) {
     const runtime=service.local?localRuntimeResult(env):await fetchJson(service.runtimeUrl,'CuratorOps-Drift/1.9',env,{useAccess:true});
     const github=await fetchGitHubHead(service.repository,env);
     let comparison=null;
-    const runningCommit=runtime.ok?runtime.data?.build?.commit:null;
+    const runningCommit=runtime.ok?(runtime.data?.commit||runtime.data?.build?.commit):null;
     const githubCommit=github.ok?github.data?.sha:null;
     const githubCommittedAt=github.ok?github.data?.committedAt:null;
     const headAgeMs=githubCommittedAt?Date.now()-Date.parse(githubCommittedAt):null;
@@ -58,7 +58,7 @@ async function collectDeploymentDrift(env, source) {
 function classify(service,runtimeResult,githubResult,comparisonResult=null){
   const runtime=runtimeResult.ok?runtimeResult.data:null;
   const github=githubResult.ok?githubResult.data:null;
-  const runningCommit=runtime?.build?.commit||null;
+  const runningCommit=runtime?.commit||runtime?.build?.commit||null;
   const githubCommit=github?.sha||null;
   const githubCommittedAt=github?.committedAt||null;
   const headAgeMs=githubCommittedAt?Date.now()-Date.parse(githubCommittedAt):null;
@@ -94,13 +94,13 @@ function classify(service,runtimeResult,githubResult,comparisonResult=null){
 
   return{
     id:service.id,name:service.name,repository:service.repository,state,message,relation,
-    running:{commit:runningCommit,version:runtime?.version||null,cloudflareVersionId:runtime?.cloudflareVersion?.id||null,cloudflareVersionTimestamp:runtime?.cloudflareVersion?.timestamp||null,buildSource:runtime?.build?.source||null,buildBranch:runtime?.build?.branch||null,buildUuid:runtime?.build?.buildUuid||null},
+    running:{commit:runningCommit,version:runtime?.version||null,cloudflareVersionId:runtime?.cloudflareDeploymentId||runtime?.cloudflareVersion?.id||null,cloudflareVersionTimestamp:runtime?.cloudflareVersion?.timestamp||null,buildSource:runtime?.build?.source||null,buildBranch:runtime?.build?.branch||null,buildUuid:runtime?.build?.buildUuid||null},
     github:{commit:githubCommit,committedAt:githubCommittedAt,message:github?.message||null,authFallback:githubResult.authFallback||false,comparisonStatus:comparison?.status||null,aheadBy:comparison?.aheadBy??null,behindBy:comparison?.behindBy??null,totalCommits:comparison?.totalCommits??null,filesChanged:comparison?.filesChanged??null},
     errors:{runtime:runtimeResult.ok?null:runtimeResult.error,github:githubResult.ok?(githubResult.authFallback?'Configured GitHub token was rejected; using unauthenticated fallback.':null):githubResult.error,comparison:comparisonResult&&!comparisonResult.ok?comparisonResult.error:null},
     checkedAt:new Date().toISOString()
   };
 }
-function localRuntimeResult(env){const meta=env.CF_VERSION_METADATA||{};return{ok:true,status:200,data:{ok:true,service:'Curator Ops',version:'1.1.5',repository:'jaredmberger/ops',runtime:'cloudflare-workers',cloudflareVersion:{id:meta.id||null,tag:meta.tag||null,timestamp:meta.timestamp||null},build:BUILD_META,observedAt:new Date().toISOString()}}}
+function localRuntimeResult(env){const meta=env.CF_VERSION_METADATA||{};return{ok:true,status:200,data:{ok:true,contractVersion:1,service:'Curator Ops',repository:'jaredmberger/ops',productionBranch:'main',version:'1.1.5',commit:BUILD_META.commit||null,cloudflareDeploymentId:meta.id||null,runtime:'cloudflare-workers',cloudflareVersion:{id:meta.id||null,tag:meta.tag||null,timestamp:meta.timestamp||null},build:BUILD_META,observedAt:new Date().toISOString()}}}
 async function fetchGitHubHead(repository,env){const url=`https://api.github.com/repos/${repository}/commits/main`;let result=await fetchJson(url,'CuratorOps/1.8',env,{useGitHubAuth:true});if(!result.ok&&result.status===401&&env.GITHUB_TOKEN){const fallback=await fetchJson(url,'CuratorOps/1.8',env,{useGitHubAuth:false});if(fallback.ok)result={...fallback,authFallback:true};}if(!result.ok)return result;const p=result.data;return{ok:true,authFallback:Boolean(result.authFallback),data:{sha:p?.sha||null,committedAt:p?.commit?.committer?.date||p?.commit?.author?.date||null,message:String(p?.commit?.message||'').split('\n')[0].slice(0,300)}}}
 async function fetchGitHubComparison(repository,runningCommit,githubCommit,env){
   const url=`https://api.github.com/repos/${repository}/compare/${encodeURIComponent(runningCommit)}...${encodeURIComponent(githubCommit)}`;
