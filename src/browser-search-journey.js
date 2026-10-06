@@ -6,7 +6,8 @@ const BROWSER_KEY='browser-search-journey:latest';
 const BROWSER_STATE_KEY='browser-search-journey:state';
 const INCIDENT_KEY='incident:ops-browser-search-journey';
 const EVENT_PREFIX='event:';
-const WORKFLOW_RUNS_URL='https://api.github.com/repos/jaredmberger/ops/actions/workflows/browser-search-journey.yml/runs?branch=main&per_page=1';
+const WORKFLOW_RUNS_URL='https://api.github.com/repos/jaredmberger/ops/actions/workflows/browser-search-journey.yml/runs';
+const RECENT_RUN_LIMIT=10;
 const STALE_AFTER_MS=45*60*1000;
 const RECOVERED_TTL=60*60*24*180;
 const DISPLAY_TIME_ZONE='America/Chicago';
@@ -50,7 +51,11 @@ async function collect(env,source){
       'x-github-api-version':'2022-11-28'
     };
     if(env.GITHUB_OPS_TOKEN)headers.authorization=`Bearer ${env.GITHUB_OPS_TOKEN}`;
-    const response=await fetch(WORKFLOW_RUNS_URL,{headers});
+    const runsUrl=new URL(WORKFLOW_RUNS_URL);
+    runsUrl.searchParams.set('branch','main');
+    runsUrl.searchParams.set('per_page',String(RECENT_RUN_LIMIT));
+    runsUrl.searchParams.set('_ops',String(Date.now()));
+    const response=await fetch(runsUrl.href,{headers,cache:'no-store'});
     if(!response.ok){
       const remaining=response.headers.get('x-ratelimit-remaining');
       const reset=response.headers.get('x-ratelimit-reset');
@@ -58,7 +63,7 @@ async function collect(env,source){
       throw new Error(`GitHub Actions API HTTP ${response.status}${rateDetail}`);
     }
     const payload=await response.json();
-    run=payload?.workflow_runs?.[0]||null;
+    run=selectLatestRun(payload?.workflow_runs||[]);
   }catch(error){
     fetchError=String(error?.message||error||'GitHub Actions API fetch failed');
   }
@@ -135,6 +140,19 @@ async function collect(env,source){
   await env[OPS_KV].put(BROWSER_KEY,JSON.stringify(snapshot));
   await reconcileIncident(env,snapshot);
   return snapshot;
+}
+
+export function selectLatestRun(runs){
+  if(!Array.isArray(runs)||runs.length===0)return null;
+  return runs
+    .filter(run=>run&&run.id)
+    .map((run,index)=>({run,index,anchor:Date.parse(run.updated_at||run.created_at||'')}))
+    .sort((a,b)=>{
+      const aTime=Number.isFinite(a.anchor)?a.anchor:-Infinity;
+      const bTime=Number.isFinite(b.anchor)?b.anchor:-Infinity;
+      if(bTime!==aTime)return bTime-aTime;
+      return a.index-b.index;
+    })[0]?.run||null;
 }
 
 function assessRun(run,fetchError,now){
