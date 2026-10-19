@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { selectLatestRun } from '../src/browser-search-journey.js';
+import { selectLatestRun, assessRun } from '../src/browser-search-journey.js';
 
 test('selectLatestRun chooses the newest run by updated_at, not response order',()=>{
   const runs=[
@@ -43,4 +43,16 @@ test('selectLatestRun falls back to created_at and ignores invalid entries',()=>
 
 test('selectLatestRun returns null for an empty run list',()=>{
   assert.equal(selectLatestRun([]),null);
+});
+
+test('HTTP 401 identifies credential failure without claiming a failed browser run',()=>{
+  const result=assessRun(null,'GitHub Actions API HTTP 401','2026-10-19T04:50:00Z');
+  assert.equal(result.rawState,'unreachable');
+  assert.equal(result.reason,'github-authentication-failure');
+  assert.match(result.message,/GITHUB_OPS_TOKEN/);
+});
+
+test('HTTP 500 remains a general GitHub API failure',()=>{
+  const result=assessRun(null,'GitHub Actions API HTTP 500','2026-10-19T04:50:00Z');
+  assert.equal(result.reason,'github-api-unreachable');
 });
