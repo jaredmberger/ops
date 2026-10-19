@@ -155,8 +155,11 @@ export function selectLatestRun(runs){
     })[0]?.run||null;
 }
 
-function assessRun(run,fetchError,now){
-  if(fetchError)return{rawState:'unreachable',message:fetchError,ageMinutes:null};
+export function assessRun(run,fetchError,now){
+  if(fetchError){
+    const authFailure=/GitHub Actions API HTTP 401(?:\s|$)/.test(fetchError);
+    return{rawState:'unreachable',reason:authFailure?'github-authentication-failure':'github-api-unreachable',message:authFailure?'GitHub API authentication failed (HTTP 401). Check the GITHUB_OPS_TOKEN Worker secret; browser journey execution is not implicated.':fetchError,ageMinutes:null};
+  }
   if(!run)return{rawState:'warming',message:'No browser journey run has been recorded yet.',ageMinutes:null};
   const anchor=Date.parse(run.updated_at||run.created_at||'');
   const ageMs=Number.isFinite(anchor)?Date.parse(now)-anchor:NaN;
@@ -179,8 +182,8 @@ async function reconcileIncident(env,snapshot){
       component:'synthetic:browser-search',
       severity:'p1',
       type:'ops-browser-search-persistent-failure',
-      message:snapshot.assessment?.rawState==='failed'?`Browser Search Journey has failed ${snapshot.failureStreak} separate runs.`:'Browser Search Journey is no longer reporting fresh results.',
-      context:{rawState:snapshot.assessment?.rawState||null,failureStreak:snapshot.failureStreak,stalePollStreak:snapshot.stalePollStreak,runId:snapshot.run?.id||null,conclusion:snapshot.run?.conclusion||null,runUrl:snapshot.run?.htmlUrl||null,assessment:snapshot.assessment?.message||null},
+      message:snapshot.assessment?.reason==='github-authentication-failure'?'Browser Search Journey monitoring cannot authenticate to GitHub (HTTP 401).':snapshot.assessment?.rawState==='failed'?`Browser Search Journey has failed ${snapshot.failureStreak} separate runs.`:'Browser Search Journey is no longer reporting fresh results.',
+      context:{reason:snapshot.assessment?.reason||null,rawState:snapshot.assessment?.rawState||null,failureStreak:snapshot.failureStreak,stalePollStreak:snapshot.stalePollStreak,runId:snapshot.run?.id||null,conclusion:snapshot.run?.conclusion||null,runUrl:snapshot.run?.htmlUrl||null,assessment:snapshot.assessment?.message||null},
       firstSeenAt:active?(previous.firstSeenAt||now):now,
       lastSeenAt:now,
       occurrences:active?Math.max(1,Number(previous.occurrences||0)+1):1,
