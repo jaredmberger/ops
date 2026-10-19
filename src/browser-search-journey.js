@@ -157,7 +157,7 @@ export function selectLatestRun(runs){
 
 export function assessRun(run,fetchError,now){
   if(fetchError){
-    const authFailure=/GitHub Actions API HTTP (401|403)(?:\\b|$)/.test(fetchError)&&/HTTP 401\\b/.test(fetchError);
+    const authFailure=/GitHub Actions API HTTP 401(?:\s|$)/.test(fetchError);
     return{rawState:'unreachable',reason:authFailure?'github-authentication-failure':'github-api-unreachable',message:authFailure?'GitHub API authentication failed (HTTP 401). Check the GITHUB_OPS_TOKEN Worker secret; browser journey execution is not implicated.':fetchError,ageMinutes:null};
   }
   if(!run)return{rawState:'warming',message:'No browser journey run has been recorded yet.',ageMinutes:null};
