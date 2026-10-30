@@ -112,18 +112,41 @@ function applyAccessHeaders(request,env,target){
   request.headers.set('cf-access-client-secret',env.CF_ACCESS_CLIENT_SECRET);
 }
 
+// Best-effort per-isolate cache avoids repeating KV reads for rapidly polled dashboards.
+// The scheduled checker and manual check-now endpoint still probe services and persist live state.
+const READ_CACHE_MS = 30000;
+let cachedSnapshot = null;
+let cachedHomeData = null;
+async function cachedRead(slot, load) {
+  const now = Date.now();
+  const entry = slot === 'snapshot' ? cachedSnapshot : cachedHomeData;
+  if (entry && entry.expiresAt > now) return entry.promise;
+  const next = { expiresAt: now + READ_CACHE_MS, promise: Promise.resolve().then(load) };
+  if (slot === 'snapshot') cachedSnapshot = next;
+  else cachedHomeData = next;
+  try { return await next.promise; }
+  catch (error) {
+    if (slot === 'snapshot' && cachedSnapshot === next) cachedSnapshot = null;
+    if (slot === 'home' && cachedHomeData === next) cachedHomeData = null;
+    throw error;
+  }
+}
 async function readHomeData(env){
-  requireKv(env);
-  const [reachability,drift,scheduled]=await Promise.all([
-    readSnapshot(env),
-    env[KV].get(DRIFT_SNAPSHOT_KEY,'json'),
-    env[KV].get(FRESHNESS_SNAPSHOT_KEY,'json')
-  ]);
-  return {reachability,drift,scheduled};
+  return cachedRead('home', async () => {
+    requireKv(env);
+    const [reachability,drift,scheduled]=await Promise.all([
+      readSnapshot(env),
+      env[KV].get(DRIFT_SNAPSHOT_KEY,'json'),
+      env[KV].get(FRESHNESS_SNAPSHOT_KEY,'json')
+    ]);
+    return {reachability,drift,scheduled};
+  });
 }
 async function readSnapshot(env){
-  requireKv(env);
-  return await env[KV].get(SNAPSHOT_KEY,'json')||{generatedAt:null,source:null,displayTimeZone:DISPLAY_TIME_ZONE,summary:{total:SERVICES.length,healthy:0,observing:0,degraded:0,persistent:0,status:'unknown'},services:SERVICES.map(s=>({id:s.id,name:s.name,kind:s.kind,url:s.url,ok:null,status:null,error:null,effectiveState:'unknown',failureStreak:0}))};
+  return cachedRead('snapshot', async () => {
+    requireKv(env);
+    return await env[KV].get(SNAPSHOT_KEY,'json')||{generatedAt:null,source:null,displayTimeZone:DISPLAY_TIME_ZONE,summary:{total:SERVICES.length,healthy:0,observing:0,degraded:0,persistent:0,status:'unknown'},services:SERVICES.map(s=>({id:s.id,name:s.name,kind:s.kind,url:s.url,ok:null,status:null,error:null,effectiveState:'unknown',failureStreak:0}))};
+  });
 }
 async function recordHeartbeat(env,body){requireKv(env);const service=clean(body?.service,100);if(!service)throw new Error('service is required');const now=new Date().toISOString(),record={service,status:clean(body?.status||'online',40),version:clean(body?.version,120)||null,commit:clean(body?.commit,120)||null,runtime:clean(body?.runtime,120)||null,note:clean(body?.note,500)||null,observedAt:now};await env[KV].put(`${HEARTBEAT_PREFIX}${slug(service)}`,JSON.stringify(record),{expirationTtl:60*60*24*30});return record}
 async function recordDeployment(env,body){requireKv(env);const service=clean(body?.service,100);if(!service)throw new Error('service is required');const now=new Date().toISOString(),record={id:crypto.randomUUID(),service,commit:clean(body?.commit,120)||null,version:clean(body?.version,120)||null,environment:clean(body?.environment||'production',80),provider:clean(body?.provider||'cloudflare',80),source:clean(body?.source||'reported',80),deployedAt:clean(body?.deployedAt,80)||now,recordedAt:now};const ts=Date.parse(record.deployedAt)||Date.now(),key=`${DEPLOYMENT_PREFIX}${slug(service)}:${String(9999999999999-ts).padStart(13,'0')}:${record.id}`;await env[KV].put(key,JSON.stringify(record),{expirationTtl:60*60*24*365});await env[KV].put(`${DEPLOYMENT_PREFIX}latest:${slug(service)}`,JSON.stringify(record),{expirationTtl:60*60*24*365});return record}
